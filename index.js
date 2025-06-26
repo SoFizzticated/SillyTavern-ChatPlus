@@ -3,7 +3,7 @@
 // =========================
 import { addJQueryHighlight } from './jquery-highlight.js';
 import { getGroupPastChats } from '../../../group-chats.js';
-import { getPastCharacterChats, animation_duration, animation_easing, getGeneratingApi, selectCharacterById, renameGroupOrCharacterChat } from '../../../../script.js';
+import { getPastCharacterChats, animation_duration, animation_easing, getGeneratingApi, selectCharacterById } from '../../../../script.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { debounce, timestampToMoment, sortMoments, uuidv4, waitUntilCondition } from '../../../utils.js';
 import { debounce_timeout } from '../../../constants.js';

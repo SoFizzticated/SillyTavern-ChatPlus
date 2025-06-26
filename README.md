@@ -12,7 +12,7 @@ ChatsPlus is a SillyTavern extension that enhances your chat management experien
 
 ## Installation
 
-Use this URL with the extension installer: `https://github.com/SoFizzticated/ChatsPlus`
+Use this URL with the extension installer: `https://github.com/SoFizzticated/SillyTavern-ChatPlus`
 
 ## Usage
 
