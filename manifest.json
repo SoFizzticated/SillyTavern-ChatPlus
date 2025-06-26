@@ -1,0 +1,12 @@
+{
+    "display_name": "ChatsPlus",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "SoFizzticated",
+    "version": "1.0.0",
+    "homePage": "https://github.com/SoFizzticated/SillyTavern-ChatPlus",
+    "auto_update": true
+}
