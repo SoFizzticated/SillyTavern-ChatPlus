@@ -1438,7 +1438,7 @@ refreshFoldersTab = async function () {
  * Initialize the extension: highlight, settings, and tab menu.
  * Adds event listeners for tab switching.
  */
-(function () {
+(function initExtension() {
     const context = SillyTavern.getContext();
     const settingsKey = MODULE_NAME;
     const settings = context.extensionSettings[settingsKey] ?? {};
