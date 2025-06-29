@@ -685,8 +685,18 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
         }
         return chatInfo;
     }).filter(chat => chat && chat.last_mes);
-    // Sort pinned chats by date
-    pinnedChats.sort((a, b) => b.last_mes - a.last_mes);
+    // Sort pinned chats alphabetically by character, then file_name
+    pinnedChats.sort((a, b) => {
+        const charA = (a.character || '').toLowerCase();
+        const charB = (b.character || '').toLowerCase();
+        if (charA < charB) return -1;
+        if (charA > charB) return 1;
+        const fileA = (a.file_name || '').toLowerCase();
+        const fileB = (b.file_name || '').toLowerCase();
+        if (fileA < fileB) return -1;
+        if (fileA > fileB) return 1;
+        return 0;
+    });
     // Render all pinned chats at the top
     for (const chat of pinnedChats) {
         renderAllChatsTabItem(chat, container, true, null);
