@@ -528,18 +528,48 @@ async function renderAllChatsInRecentChatsTab() {
     const chatsTabContainer = document.createElement('div');
     chatsTabContainer.id = 'extensionAllChatsTabContainer';
     container.appendChild(chatsTabContainer);
-    // --- Filtering logic ---
+    // --- Load More button ---
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.id = 'extensionAllChatsTabLoadMoreBtn';
+    loadMoreBtn.classList.add('load-more-btn');
+    loadMoreBtn.classList.add('hidden'); // Initially hidden
+    loadMoreBtn.textContent = 'Load More';
+    container.appendChild(loadMoreBtn);
+    // --- Filtering and pagination logic ---
     let lastFilter = '';
     let lastChatsData = null;
-    async function doPopulate(filterValue) {
+    let offset = 0;
+    let totalChats = 0;
+    async function doPopulate(filterValue, append = false) {
         lastFilter = filterValue;
-        await populateAllChatsTab({ container: chatsTabContainer, loader, tab: container, filter: filterValue, cache: lastChatsData });
+        const result = await populateAllChatsTab({
+            container: chatsTabContainer,
+            loader,
+            tab: container,
+            filter: filterValue,
+            cache: lastChatsData,
+            setCache: (data) => { lastChatsData = data; },
+            offset,
+            append
+        });
+        totalChats = result && result.totalChats ? result.totalChats : 0;
+        if (offset + MAX_RECENT_CHATS < totalChats) {
+            loadMoreBtn.classList.remove('hidden');
+        } else {
+            loadMoreBtn.classList.add('hidden');
+        }
     }
     filterInput.addEventListener('input', (e) => {
+        offset = 0;
+        chatsTabContainer.innerHTML = '';
         doPopulate(e.target.value.trim());
     });
+    loadMoreBtn.addEventListener('click', () => {
+        offset += MAX_RECENT_CHATS;
+        doPopulate(lastFilter, true);
+    });
     // Initial population
-    await populateAllChatsTab({ container: chatsTabContainer, loader, tab: container, filter: '', cache: null, setCache: (data) => { lastChatsData = data; } });
+    await doPopulate('', false);
 }
 
 /**
@@ -551,13 +581,16 @@ async function renderAllChatsInRecentChatsTab() {
  * @param {string} [param0.filter] - Optional filter string.
  * @param {Object} [param0.cache] - Optional cache of chat data.
  * @param {Function} [param0.setCache] - Optional callback to set cache.
+ * @param {number} [param0.offset] - Offset for pagination.
+ * @param {boolean} [param0.append] - Whether to append to container.
+ * @returns {Object} - { totalChats }
  */
-async function populateAllChatsTab({ container, loader, tab, filter = '', cache = null, setCache = null } = {}) {
+async function populateAllChatsTab({ container, loader, tab, filter = '', cache = null, setCache = null, offset = 0, append = false } = {}) {
     container = container || document.getElementById('extensionAllChatsTabContainer');
     loader = loader || document.getElementById('extensionAllChatsTabLoader');
-    if (!loader || !container) return;
+    if (!loader || !container) return { totalChats: 0 };
     loader.classList.remove('displayNone');
-    container.innerHTML = '';
+    if (!append) container.innerHTML = '';
     let allChats = [];
     let chatStatsMap = {};
     if (cache && cache.allChats && cache.chatStatsMap) {
@@ -613,10 +646,7 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
         return { ...chat, stat, last_mes: lastMesDate };
     }).filter(chat => chat.last_mes);
     // Ensure allChats is a flat array and sort strictly by date
-    console.log('[DEBUG] allChats before sort:', allChats.map(c => ({ character: c.character, file_name: c.file_name, last_mes: c.last_mes })));
     allChats.sort((a, b) => b.last_mes - a.last_mes);
-    console.log('[DEBUG] allChats after sort:', allChats.map(c => ({ character: c.character, file_name: c.file_name, last_mes: c.last_mes })));
-    allChats = allChats.slice(0, MAX_RECENT_CHATS);
     // --- Filtering ---
     let filterLower = filter ? filter.toLowerCase() : '';
     function chatMatches(chat) {
@@ -627,29 +657,53 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
             (chat.stat && chat.stat.mes && chat.stat.mes.toLowerCase().includes(filterLower))
         );
     }
-    const pinnedChats = [];
-    const folderedChats = {};
-    const unpinnedChats = [];
-    const folders = getFolders();
-    for (const folder of folders) folderedChats[folder.id] = [];
-    for (const chat of allChats) {
-        if (isChatPinned(chat)) pinnedChats.push(chat);
-        const folderIds = getChatFolderIds(chat);
-        for (const folderId of folderIds) {
-            if (folderedChats[folderId]) folderedChats[folderId].push(chat);
+    const filteredChats = allChats.filter(chatMatches);
+    const totalChats = filteredChats.length;
+    const chatsToShow = filteredChats.slice(offset, offset + MAX_RECENT_CHATS);
+    // --- Render pinned and recent chats (filtered, paginated) ---
+    // Always render all pinned chats, not just those in the current page
+    const pinnedChatsRaw = getPinnedChats();
+    const pinnedChats = pinnedChatsRaw.map(pinned => {
+        // Try to find stat info from chatStatsMap
+        const stat = chatStatsMap[pinned.characterId + ':' + pinned.file_name];
+        // Try to get character info from allChats or SillyTavern context
+        let chatInfo = allChats.find(c => c.characterId === pinned.characterId && c.file_name === pinned.file_name);
+        if (!chatInfo) {
+            // Fallback: try to get character info from context
+            const context = SillyTavern.getContext();
+            const char = context.characters && context.characters[pinned.characterId];
+            chatInfo = {
+                character: char ? (char.name || pinned.characterId) : pinned.characterId,
+                avatar: char ? char.avatar : '',
+                file_name: pinned.file_name,
+                characterId: pinned.characterId,
+                stat: stat,
+                last_mes: stat && stat.last_mes ? timestampToMoment(stat.last_mes).toDate() : null
+            };
+        } else {
+            chatInfo = { ...chatInfo, stat };
         }
-        unpinnedChats.push(chat);
-    }
-    const pinnedSet = new Set(pinnedChats.map(chat => chat.characterId + ':' + chat.file_name));
-    // --- Render pinned chats (filtered) ---
+        return chatInfo;
+    }).filter(chat => chat && chat.last_mes);
+    // Sort pinned chats by date
+    pinnedChats.sort((a, b) => b.last_mes - a.last_mes);
+    // Render all pinned chats at the top
     for (const chat of pinnedChats) {
-        if (chatMatches(chat)) renderAllChatsTabItem(chat, container, true, null);
+        renderAllChatsTabItem(chat, container, true, null);
     }
     // --- Render recent chats (filtered, skip pinned) ---
+    const pinnedSet = new Set(pinnedChats.map(chat => chat.characterId + ':' + chat.file_name));
     let lastDate = null;
-    for (const chat of allChats) {
+    if (append) {
+        // Find the last date separator in the container
+        const dateSeparators = Array.from(container.querySelectorAll('.allChatsDateSeparator'));
+        if (dateSeparators.length > 0) {
+            const lastSeparator = dateSeparators[dateSeparators.length - 1];
+            lastDate = lastSeparator.getAttribute('data-date') || null;
+        }
+    }
+    for (const chat of chatsToShow) {
         if (pinnedSet.has(chat.characterId + ':' + chat.file_name)) continue;
-        if (!chatMatches(chat)) continue;
         const stat = chat.stat;
         const chatMoment = stat && stat.last_mes ? timestampToMoment(stat.last_mes) : null;
         const chatDateStr = chatMoment ? chatMoment.format('YYYY-MM-DD') : '';
@@ -658,11 +712,13 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
             const dateSeparator = document.createElement('div');
             dateSeparator.className = 'allChatsDateSeparator';
             dateSeparator.textContent = chatMoment ? chatMoment.format('LL') : '';
+            dateSeparator.setAttribute('data-date', chatDateStr); // For tracking
             container.appendChild(dateSeparator);
         }
         renderAllChatsTabItem(chat, container, false, null);
     }
     loader.classList.add('displayNone');
+    return { totalChats };
 }
 
 /**
