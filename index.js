@@ -10,7 +10,6 @@ import { t } from '../../../i18n.js';
 
 const {
     getCurrentChatId,
-    renameChat,
     getRequestHeaders,
     openGroupChat,
     openCharacterChat,
@@ -210,22 +209,6 @@ function getChatFolderId(chat) {
  */
 async function promptSelectFolderOrPinned(chat) {
     const folders = getFolders().slice().sort((a, b) => a.name.localeCompare(b.name));
-    // Helper: build tree
-    function buildFolderTreeForPopup(folders) {
-        const idToNode = {};
-        folders.forEach(folder => {
-            idToNode[folder.id] = { ...folder, children: [] };
-        });
-        const roots = [];
-        folders.forEach(folder => {
-            if (folder.parent && idToNode[folder.parent]) {
-                idToNode[folder.parent].children.push(idToNode[folder.id]);
-            } else {
-                roots.push(idToNode[folder.id]);
-            }
-        });
-        return roots;
-    }
     // Helper: render radios as tree, with chat previews
     function renderFolderRadios(nodes, radioName, container, level = 0) {
         nodes.forEach(folder => {
@@ -398,7 +381,7 @@ async function promptSelectFolderOrPinned(chat) {
     radioGroup.appendChild(separatorPinnedToFolders);
 
     // Render folder radios as tree, with previews
-    const folderTree = buildFolderTreeForPopup(folders);
+    const folderTree = buildFolderTree(folders);
     renderFolderRadios(folderTree, radioName, radioGroup, 0);
     content.appendChild(radioGroup);
     const popup = new Popup(content, POPUP_TYPE.TEXT, '', {
@@ -972,8 +955,9 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
                 });
             }
             handleChatRename(chat, nameInput.value.trim());
-            // Optionally, refresh UI after rename
+            // Refresh UI after renaming
             if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
+            if (typeof refreshFoldersTab === 'function') await refreshFoldersTab();
         }
     });
 
@@ -1491,8 +1475,9 @@ function addTabToCharManagementMenu() {
                     });
                 }
                 handleChatRename(chat, nameInput.value.trim());
-                // Optionally, refresh UI after rename
+                // Refresh UI after renaming
                 if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
+                if (typeof refreshFoldersTab === 'function') await refreshFoldersTab();
             }
         });
 
@@ -1566,22 +1551,6 @@ refreshFoldersTab = async function () {
     addFolderBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
     addFolderBtn.addEventListener('click', async () => {
         // Show a popup with a list of all folders as radio inputs and allow selecting one (or none)
-        // Build a tree structure for folders
-        function buildFolderTreeForPopup(folders) {
-            const idToNode = {};
-            folders.forEach(folder => {
-                idToNode[folder.id] = { ...folder, children: [] };
-            });
-            const roots = [];
-            folders.forEach(folder => {
-                if (folder.parent && idToNode[folder.parent]) {
-                    idToNode[folder.parent].children.push(idToNode[folder.id]);
-                } else {
-                    roots.push(idToNode[folder.id]);
-                }
-            });
-            return roots;
-        }
         // Recursively render radio buttons for folders
         function renderFolderRadios(nodes, radioName, container, level = 0) {
             nodes.forEach(folder => {
@@ -1620,7 +1589,7 @@ refreshFoldersTab = async function () {
         noneLabel.appendChild(document.createTextNode(' ' + t`No parent`));
         radioGroup.appendChild(noneLabel);
         // Render folder radios as tree
-        const folderTree = buildFolderTreeForPopup(folders);
+        const folderTree = buildFolderTree(folders);
         renderFolderRadios(folderTree, radioName, radioGroup, 0);
         content.appendChild(radioGroup);
         content.innerHTML += `<hr style='margin:10px 0;'>`;
@@ -1791,7 +1760,6 @@ function handleChatRename(chat, newName) {
     if (!characterId) {
         const context = SillyTavern.getContext();
         if (context.characterId !== undefined) {
-
             characterId = context.characterId;
         } else if (context.groupId !== undefined) {
             characterId = context.groupId; // fallback for group chats
@@ -1818,6 +1786,4 @@ function handleChatRename(chat, newName) {
         delete map[oldKey];
         setChatFoldersMap(map);
     }
-    // Optionally, show a notification (remove alert for production)
-    // alert(`Chat renamed from ${chat.file_name} to ${newName}`);
 }
