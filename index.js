@@ -824,6 +824,13 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
                 cancelButton: t`Cancel`,
                 wide: true
             });
+            // Add Enter key support
+            nameInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    popup.okButton.click(); // Trigger the popup's OK button
+                }
+            });
             const result = await popup.show();
             if (result !== POPUP_RESULT.CANCELLED && nameInput.value.trim() && nameInput.value.trim() !== folder.name) {
                 // Update folder name
@@ -1459,6 +1466,14 @@ refreshFoldersTab = async function () {
                 large: true,
             }
         );
+        // Trigger the popup's OK button on Enter key
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                popup.okButton.click();
+            }
+        });
+
         // Wait for popup result
         const popupResult = await popup.show();
         console.log(`Popup result: ${popupResult}`);
@@ -1467,7 +1482,6 @@ refreshFoldersTab = async function () {
         const selectedRadio = content.querySelector('input[type="radio"]:checked');
         const selectedFolderId = selectedRadio && selectedRadio.value ? selectedRadio.value : null;
         const name = nameInput.value;
-        console.log('Adding folder:', name, 'with parent ID:', selectedFolderId);
         if (name && name.trim()) {
             addFolder(name.trim(), selectedFolderId);
             await refreshFoldersTab();
