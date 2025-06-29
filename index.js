@@ -935,10 +935,20 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
     pinBtn.className = 'pinBtn tabItem-pinBtn';
     if (folderId && folderId !== 'pinned') {
         pinBtn.title = t`Remove from folder`;
-        pinBtn.innerHTML = '<i class="fa-solid fa-thumbtack"></i>';
+        pinBtn.innerHTML = `
+            <span class="icon-slash-overlay">
+                <i class="fa-solid fa-thumbtack"></i>
+            </span>
+        `;
     } else {
         pinBtn.title = isPinned ? t`Unpin chat` : t`Pin or folder chat`;
-        pinBtn.innerHTML = isPinned ? '<i class="fa-solid fa-thumbtack"></i>' : '<i class="fa-regular fa-bookmark"></i>';
+        pinBtn.innerHTML = isPinned
+            ? `
+                <span class="icon-slash-overlay">
+                    <i class="fa-solid fa-thumbtack"></i>
+                </span>
+            `
+            : '<i class="fa-regular fa-bookmark"></i>';
     }
     pinBtn.addEventListener('click', async (e) => {
         e.stopPropagation();

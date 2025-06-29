@@ -2,6 +2,22 @@
     display: none !important;
 }
 
+.icon-slash-overlay {
+  position: relative;
+  display: inline-block;
+}
+.icon-slash-overlay::after {
+    content: "";
+    position: absolute;
+    left: 45%;
+    top: 0;
+    width: 15%;
+    height: 100%;
+    background: var(--SmartThemeBodyColor);
+    transform: rotate(-45deg);
+    pointer-events: none;
+}
+
 /* Collapsible section: always take full width, do not shrink, and keep order */
 .collapsible-section {
     width: 100%;
