@@ -83,10 +83,6 @@
     display: none;
 }
 
-.folder-collapsible-section + .folder-collapsible-section {
-    /* margin-top: 6px; */
-}
-
 .emptyFolderMessage {
     margin-left: 43px;
     opacity: 0.6;
@@ -224,7 +220,7 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -247,6 +243,10 @@
     border-radius: 5px;
     align-self: center;
 }
+.tabItem-singleline .tabItem-nameRow {
+    font-size: calc(var(--mainFontSize) * 0.95);
+    text-align: left;
+}
 .tabItem-infoContainer {
     display: flex;
     flex-direction: column;
@@ -259,7 +259,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-align: left;
+    text-align: center;
 }
 .tabItem-bottomRow {
     display: flex;
@@ -278,7 +278,6 @@
     opacity: 0.8;
 }
 .tabItem-pinBtn {
-    margin: 0 0 0 8px;
     align-self: flex-end;
 }
 

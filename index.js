@@ -3,10 +3,9 @@
 // =========================
 import { addJQueryHighlight } from './jquery-highlight.js';
 import { getGroupPastChats } from '../../../group-chats.js';
-import { getPastCharacterChats, animation_duration, animation_easing, getGeneratingApi, selectCharacterById } from '../../../../script.js';
+import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat } from '../../../../script.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
-import { debounce, timestampToMoment, sortMoments, uuidv4, waitUntilCondition } from '../../../utils.js';
-import { debounce_timeout } from '../../../constants.js';
+import { timestampToMoment } from '../../../utils.js';
 import { t } from '../../../i18n.js';
 
 const {
@@ -928,6 +927,56 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
     previewImg.className = 'tabItem-previewImg';
     previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
     previewImg.alt = chat.character || '';
+
+    // --- Pencil icon for renaming chat ---
+    const pencilIcon = document.createElement('i');
+    pencilIcon.className = 'fa-solid fa-pencil-alt chat-rename-icon';
+    pencilIcon.style.cursor = 'pointer';
+    pencilIcon.style.margin = '0 6px 0 6px';
+    pencilIcon.title = t`Rename chat`;
+    pencilIcon.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        // Show rename popup for chat
+        const content = document.createElement('div');
+        content.innerHTML = `<h3>${t`Rename chat`}</h3>`;
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = chat.file_name;
+        nameInput.style.width = '100%';
+        nameInput.style.marginTop = '8px';
+        nameInput.className = 'chatplus_menu_input';
+        content.appendChild(nameInput);
+        const popup = new Popup(content, POPUP_TYPE.TEXT, '', {
+            okButton: t`Rename`,
+            cancelButton: t`Cancel`,
+            wide: true
+        });
+        nameInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                popup.okButton.click();
+            }
+        });
+        const result = await popup.show();
+        if ((result === POPUP_RESULT.AFFIRMATIVE) && nameInput.value.trim() && nameInput.value.trim() !== chat.file_name) {
+            // --- Call renameGroupOrCharacterChat if available ---
+            if (typeof renameGroupOrCharacterChat === 'function') {
+                const context = SillyTavern.getContext();
+                const loader = document.getElementById('extensionAllChatsTabLoader') || null;
+                await renameGroupOrCharacterChat({
+                    characterId: chat.characterId,
+                    groupId: context.groupId,
+                    oldFileName: chat.file_name,
+                    newFileName: nameInput.value.trim(),
+                    loader
+                });
+            }
+            handleChatRename(chat, nameInput.value.trim());
+            // Optionally, refresh UI after rename
+            if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
+        }
+    });
+
     const nameRow = document.createElement('div');
     nameRow.className = 'tabItem-nameRow';
     nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -1086,6 +1135,8 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
         nameRow.textContent = `${chat.character}: ${chat.file_name}`;
         const bottomRow = document.createElement('div');
         bottomRow.className = 'tabItem-bottomRow';
+        // Pencil icon, first message, pin button (in this order)
+        bottomRow.appendChild(pencilIcon);
         const chatMessage = document.createElement('div');
         chatMessage.classList.add('chatMessage', 'tabItem-message');
         chatMessage.textContent = stat && stat.mes ? stat.mes : '';
@@ -1101,6 +1152,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
     container.appendChild(tabItem);
     tabItem.addEventListener('click', async (e) => {
         if (e.target.closest('.tabItem-pinBtn')) return;
+        if (e.target.closest('.chat-rename-icon')) return;
         const context = SillyTavern.getContext();
         if (String(context.characterId) !== String(chat.characterId)) {
             await selectCharacterById(chat.characterId);
@@ -1345,7 +1397,115 @@ function addTabToCharManagementMenu() {
     foldersTabButton.className = 'chatsplus-tab';
     tabRow.appendChild(foldersTabButton);
     charListButtonAndHotSwaps.insertAdjacentElement('afterend', tabRow);
-    // charListButtonAndHotSwaps.insertAdjacentElement('afterend', hr);
+
+    // "Currently selected chat" element above the tab row
+    const selectedChatWrapper = document.createElement('div');
+    selectedChatWrapper.id = 'chatsplus-selected-chat-wrapper';
+    selectedChatWrapper.style.margin = '8px 0 8px 0';
+    // Add a header/title
+    const selectedChatHeader = document.createElement('div');
+    selectedChatHeader.textContent = t ? t`Currently Selected Chat` : 'Currently Selected Chat';
+    selectedChatHeader.style.fontWeight = 'bold';
+    selectedChatHeader.style.fontSize = '1.08em';
+    selectedChatHeader.style.marginBottom = '2px';
+    selectedChatHeader.style.marginLeft = '2px';
+    selectedChatWrapper.appendChild(selectedChatHeader);
+    const selectedChatContainer = document.createElement('div');
+    selectedChatContainer.id = 'chatsplus-selected-chat-container';
+    selectedChatWrapper.appendChild(selectedChatContainer);
+    tabRow.insertAdjacentElement('beforebegin', selectedChatWrapper);
+
+    // Helper to render the currently selected chat
+    function renderSelectedChat() {
+        selectedChatContainer.innerHTML = '';
+        const context = SillyTavern.getContext();
+        let chatId = getCurrentChatId && getCurrentChatId();
+        let charId = context.characterId;
+        let chat = null;
+        if (context.characters && charId && context.characters[charId]) {
+            const char = context.characters[charId];
+            chat = {
+                character: char.name || charId,
+                avatar: char.avatar,
+                file_name: chatId,
+                characterId: charId
+            };
+        }
+        if (!chat || !chat.file_name) return;
+        // Use the same rendering as .tabItem .tabItem-root
+        const tabItem = document.createElement('div');
+        tabItem.classList.add('tabItem', 'tabItem-root', 'tabItem-singleline');
+        tabItem.style.display = 'flex';
+        tabItem.style.flexDirection = 'row';
+        tabItem.style.alignItems = 'center';
+        tabItem.style.gap = '10px';
+        tabItem.style.marginBottom = '2px';
+        const previewImg = document.createElement('img');
+        previewImg.className = 'tabItem-previewImg';
+        previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+        previewImg.alt = chat.character || '';
+        const nameRow = document.createElement('div');
+        nameRow.className = 'tabItem-nameRow';
+        nameRow.textContent = `${chat.character}: ${chat.file_name}`;
+        // --- Pencil icon for renaming chat ---
+        const pencilIcon = document.createElement('i');
+        pencilIcon.className = 'fa-solid fa-pencil-alt chat-rename-icon';
+        pencilIcon.style.cursor = 'pointer';
+        pencilIcon.style.margin = '0 6px 0 6px';
+        pencilIcon.title = t ? t`Rename chat` : 'Rename chat';
+        pencilIcon.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            // Show rename popup for chat
+            const content = document.createElement('div');
+            content.innerHTML = `<h3>${t ? t`Rename chat` : 'Rename chat'}</h3>`;
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.value = chat.file_name;
+            nameInput.style.width = '100%';
+            nameInput.style.marginTop = '8px';
+            nameInput.className = 'chatplus_menu_input';
+            content.appendChild(nameInput);
+            const popup = new Popup(content, POPUP_TYPE.TEXT, '', {
+                okButton: t ? t`Rename` : 'Rename',
+                cancelButton: t ? t`Cancel` : 'Cancel',
+                wide: true
+            });
+            nameInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    popup.okButton.click();
+                }
+            });
+            const result = await popup.show();
+            if ((result === POPUP_RESULT.AFFIRMATIVE) && nameInput.value.trim() && nameInput.value.trim() !== chat.file_name) {
+                // --- Call renameGroupOrCharacterChat if available ---
+                if (typeof renameGroupOrCharacterChat === 'function') {
+                    const context = SillyTavern.getContext();
+                    const loader = document.getElementById('extensionAllChatsTabLoader') || null;
+                    await renameGroupOrCharacterChat({
+                        characterId: chat.characterId,
+                        groupId: context.groupId,
+                        oldFileName: chat.file_name,
+                        newFileName: nameInput.value.trim(),
+                        loader
+                    });
+                }
+                handleChatRename(chat, nameInput.value.trim());
+                // Optionally, refresh UI after rename
+                if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
+            }
+        });
+
+        tabItem.appendChild(previewImg);
+        tabItem.appendChild(nameRow);
+        tabItem.appendChild(pencilIcon);
+        selectedChatContainer.appendChild(tabItem);
+    }
+    // Initial render
+    renderSelectedChat();
+    // Listen for chat changes (simple polling, or you can hook into SillyTavern events if available)
+    setInterval(renderSelectedChat, 1500);
+
     const tabsWrapper = document.createElement('div');
     tabsWrapper.id = 'chatsplus-tab-content-wrapper';
     tabsWrapper.className = 'chatsplus-tab-content';
@@ -1584,43 +1744,6 @@ refreshFoldersTab = async function () {
     const settings = context.extensionSettings[settingsKey] ?? {};
     renderExtensionSettings();
 
-    // Listen for chatRenamed event
-    /*
-        // event.detail = { chatId, newName }
-        const { chatId, newName } = event.detail;
-        // Try to extract characterId from current context (best effort)
-        let characterId = null;
-        const context = SillyTavern.getContext();
-        if (context.characterId !== undefined) {
-            characterId = context.characterId;
-        } else if (context.groupId !== undefined) {
-            characterId = context.groupId; // fallback for group chats
-        }
-        if (!characterId) return;
-        // Update pinnedChats
-        let pinned = getPinnedChats();
-        let changed = false;
-        pinned = pinned.map(chat => {
-            if (chat.file_name === chatId && chat.characterId === characterId) {
-                changed = true;
-                return { ...chat, file_name: newName };
-            }
-            return chat;
-        });
-        if (changed) setPinnedChats(pinned);
-        // Update chatFolders
-        let map = getChatFoldersMap();
-        const oldKey = characterId + ':' + chatId;
-        const newKey = characterId + ':' + newName;
-        if (map[oldKey]) {
-            map[newKey] = map[oldKey];
-            delete map[oldKey];
-            setChatFoldersMap(map);
-        }
-        // Optionally, show a notification (remove alert for production)
-        alert(`Chat renamed from ${chatId} to ${newName}`);
-    */
-
     // Enable/Disable the extension
     if (settings.enabled === false) return;
 
@@ -1656,3 +1779,45 @@ refreshFoldersTab = async function () {
         });
     }
 })();
+
+/**
+ * Update all internal references to a chat when its file_name is changed.
+ * @param {Object} chat - The chat object being renamed.
+ * @param {string} newName - The new file_name for the chat.
+ */
+function handleChatRename(chat, newName) {
+    // Try to extract characterId from chat object
+    let characterId = chat.characterId;
+    if (!characterId) {
+        const context = SillyTavern.getContext();
+        if (context.characterId !== undefined) {
+
+            characterId = context.characterId;
+        } else if (context.groupId !== undefined) {
+            characterId = context.groupId; // fallback for group chats
+        }
+    }
+    if (!characterId) return;
+    // Update pinnedChats
+    let pinned = getPinnedChats();
+    let changed = false;
+    pinned = pinned.map(p => {
+        if (p.file_name === chat.file_name && p.characterId === characterId) {
+            changed = true;
+            return { ...p, file_name: newName };
+        }
+        return p;
+    });
+    if (changed) setPinnedChats(pinned);
+    // Update chatFolders
+    let map = getChatFoldersMap();
+    const oldKey = characterId + ':' + chat.file_name;
+    const newKey = characterId + ':' + newName;
+    if (map[oldKey]) {
+        map[newKey] = map[oldKey];
+        delete map[oldKey];
+        setChatFoldersMap(map);
+    }
+    // Optionally, show a notification (remove alert for production)
+    // alert(`Chat renamed from ${chat.file_name} to ${newName}`);
+}
