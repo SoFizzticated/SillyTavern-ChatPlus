@@ -856,7 +856,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
                 cancelButton: t`Cancel`
             });
             const result = await popup.show();
-            if (result === POPUP_RESULT.OK) {
+            if (result === POPUP_RESULT.AFFIRMATIVE) {
                 removeFolder(folder.id);
                 await refreshFoldersTab();
             }
@@ -963,7 +963,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
                 cancelButton: t`Cancel`
             });
             const result = await popup.show();
-            if (result === POPUP_RESULT.OK) {
+            if (result === POPUP_RESULT.AFFIRMATIVE) {
                 removeChatFromFolder(chat, folderId);
                 await refreshFoldersTab();
             }
@@ -996,7 +996,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
                 cancelButton: t`Cancel`
             });
             const result = await popup.show();
-            if (result === POPUP_RESULT.OK) {
+            if (result === POPUP_RESULT.AFFIRMATIVE) {
                 togglePinChat(chat);
                 await populateAllChatsTab();
             }
