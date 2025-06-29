@@ -583,7 +583,8 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
         const chatLists = await Promise.all(chatListPromises);
         allChats = chatLists.flat();
         // 2. Fetch all stats for all characters in parallel
-        const statsPromises = Object.keys(characters).map(async (charId) => {
+        const uniqueCharacterIds = [...new Set(allChats.map(chat => chat.characterId))];
+        const statsPromises = uniqueCharacterIds.map(async (charId) => {
             try {
                 const statsList = await getPastCharacterChats(charId);
                 return statsList.map(stat => {
@@ -1415,26 +1416,36 @@ refreshFoldersTab = async function () {
     foldersTabContainer.appendChild(addFolderRow);
     let allChats = [];
     if (SillyTavern.getContext().characters) {
-        for (const [charId, char] of Object.entries(SillyTavern.getContext().characters)) {
+        const characters = SillyTavern.getContext().characters;
+        // Parallelize fetching chat lists for all characters
+        const chatListPromises = Object.entries(characters).map(async ([charId, char]) => {
             try {
                 const chats = await getListOfCharacterChats(char.avatar);
-                for (const chatName of chats) {
-                    if (typeof chatName !== 'string' || !chatName) continue; // Skip invalid chat entries
-                    allChats.push({ character: char.name || charId, avatar: char.avatar, file_name: chatName, characterId: charId });
-                }
-            } catch (e) { }
-        }
+                return chats.filter(chatName => typeof chatName === 'string' && chatName).map(chatName => ({
+                    character: char.name || charId,
+                    avatar: char.avatar,
+                    file_name: chatName,
+                    characterId: charId
+                }));
+            } catch (e) { return []; }
+        });
+        const chatLists = await Promise.all(chatListPromises);
+        allChats = chatLists.flat();
     }
     let chatStatsMap = {};
-    for (const chat of allChats) {
+    // Parallelize fetching stats for all characters
+    const uniqueCharacterIds = [...new Set(allChats.map(chat => chat.characterId))];
+    const statsPromises = uniqueCharacterIds.map(async (charId) => {
         try {
-            const statsList = await getPastCharacterChats(chat.characterId);
-            for (const stat of statsList) {
+            const statsList = await getPastCharacterChats(charId);
+            return statsList.map(stat => {
                 const fileName = String(stat.file_name).replace('.jsonl', '');
-                chatStatsMap[chat.characterId + ':' + fileName] = stat;
-            }
-        } catch (e) { }
-    }
+                return [charId + ':' + fileName, stat];
+            });
+        } catch (e) { return []; }
+    });
+    const statsEntries = (await Promise.all(statsPromises)).flat();
+    chatStatsMap = Object.fromEntries(statsEntries);
     allChats = allChats.map(chat => {
         const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
         let lastMesRaw = stat && stat.last_mes ? stat.last_mes : null;
