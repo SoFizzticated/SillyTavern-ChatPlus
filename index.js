@@ -332,6 +332,12 @@ async function promptSelectFolderOrPinned(chat) {
     tabItem.appendChild(nameRow);
     previewContainer.appendChild(tabItem);
     content.appendChild(previewContainer);
+
+    // Separator between chat preview and pinned chats
+    const separatorPreviewToPinned = document.createElement('hr');
+    separatorPreviewToPinned.style.margin = '8px 0';
+    content.appendChild(separatorPreviewToPinned);
+
     const radioGroup = document.createElement('div');
     radioGroup.className = 'chatplus_radio_group';
     const radioName = 'pin-folder-radio';
@@ -386,10 +392,12 @@ async function promptSelectFolderOrPinned(chat) {
         });
         radioGroup.appendChild(pinnedPreviewContainer);
     }
+
     // Separator between pinned and folders
-    const separator = document.createElement('hr');
-    separator.style.margin = '8px 0';
-    radioGroup.appendChild(separator);
+    const separatorPinnedToFolders = document.createElement('hr');
+    separatorPinnedToFolders.style.margin = '8px 0';
+    radioGroup.appendChild(separatorPinnedToFolders);
+
     // Render folder radios as tree, with previews
     const folderTree = buildFolderTreeForPopup(folders);
     renderFolderRadios(folderTree, radioName, radioGroup, 0);
