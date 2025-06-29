@@ -117,7 +117,6 @@ function setFolders(folders) {
 function addFolder(name, parent = null) {
     const folders = getFolders();
     const id = 'folder_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-    console.log(`Adding folder: ${name}, ID: ${id}, Parent: ${parent}`);
     folders.push({ id, name, parent });
     setFolders(folders);
 }
@@ -223,7 +222,7 @@ async function promptSelectFolderOrPinned(chat) {
             label.appendChild(radio);
             label.appendChild(document.createTextNode(' 📁 ' + folder.name));
             container.appendChild(label);
-            // --- Chat preview for this folder ---
+            // Chat preview for this folder 
             const folderChats = Object.entries(getChatFoldersMap())
                 .filter(([key, ids]) => Array.isArray(ids) && ids.includes(folder.id))
                 .map(([key]) => {
@@ -291,7 +290,7 @@ async function promptSelectFolderOrPinned(chat) {
     const content = document.createElement('div');
     content.className = 'pin-popup-content';
     content.innerHTML = `<h3>${t`Pin or folder chat`}</h3>`;
-    // --- Chat preview for the chat being pinned ---
+    // Chat preview for the chat being pinned
     const previewContainer = document.createElement('div');
     previewContainer.className = 'pin-popup-chat-preview';
     previewContainer.style.margin = '8px 0 12px 0';
@@ -335,7 +334,7 @@ async function promptSelectFolderOrPinned(chat) {
     pinnedLabel.appendChild(pinnedRadio);
     pinnedLabel.appendChild(document.createTextNode(' 📌 ' + t`Pinned section`));
     radioGroup.appendChild(pinnedLabel);
-    // --- Preview pinned chats ---
+    // Preview pinned chats 
     const pinnedChats = getPinnedChats();
     if (pinnedChats.length > 0) {
         const pinnedPreviewContainer = document.createElement('div');
@@ -483,34 +482,19 @@ async function renderAllChatsInRecentChatsTab() {
     const container = getOrCreateRecentChatsTabContainer();
     if (!container) return;
     if (container.querySelector('#extensionAllChatsTabContainer')) return;
-    // --- Add filter input at the top ---
+    // Add filter input at the top 
     const filterRow = document.createElement('div');
-    filterRow.style.display = 'flex';
-    filterRow.style.justifyContent = 'flex-start';
-    filterRow.style.alignItems = 'center';
-    filterRow.style.margin = '8px 4px 12px 4px';
+    filterRow.className = 'filter-row';
     const filterInput = document.createElement('input');
     filterInput.type = 'text';
     filterInput.placeholder = 'Filter chats...';
-    filterInput.style.width = '100%';
-    filterInput.style.padding = '6px 10px';
-    filterInput.style.fontSize = '1em';
-    filterInput.style.borderRadius = '6px';
-    filterInput.style.border = '1px solid #333';
-    filterInput.style.background = '#222';
-    filterInput.style.color = '#fff';
-    filterInput.style.marginRight = '8px';
+    filterInput.className = 'filter-input';
     filterRow.appendChild(filterInput);
     container.appendChild(filterRow);
-    // --- Loader and main container ---
+    // Loader and main container 
     const loader = document.createElement('div');
     loader.id = 'extensionAllChatsTabLoader';
-    loader.style.display = 'flex';
-    loader.style.justifyContent = 'center';
-    loader.style.alignItems = 'center';
-    loader.style.width = '100%';
-    loader.style.height = '100%';
-    loader.style.position = 'relative';
+    loader.className = 'allChatsTabLoader'; // Initially hidden
     const loaderIcon = document.createElement('i');
     loaderIcon.className = 'fa-2x fa-solid fa-gear fa-spin';
     loader.appendChild(loaderIcon);
@@ -518,14 +502,14 @@ async function renderAllChatsInRecentChatsTab() {
     const chatsTabContainer = document.createElement('div');
     chatsTabContainer.id = 'extensionAllChatsTabContainer';
     container.appendChild(chatsTabContainer);
-    // --- Load More button ---
+    // Load More button
     const loadMoreBtn = document.createElement('button');
     loadMoreBtn.id = 'extensionAllChatsTabLoadMoreBtn';
     loadMoreBtn.classList.add('load-more-btn');
     loadMoreBtn.classList.add('hidden'); // Initially hidden
     loadMoreBtn.textContent = 'Load More';
     container.appendChild(loadMoreBtn);
-    // --- Filtering and pagination logic ---
+    // Filtering and pagination logic
     let lastFilter = '';
     let lastChatsData = null;
     let offset = 0;
@@ -637,7 +621,7 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
     }).filter(chat => chat.last_mes);
     // Ensure allChats is a flat array and sort strictly by date
     allChats.sort((a, b) => b.last_mes - a.last_mes);
-    // --- Filtering ---
+    // Filtering
     let filterLower = filter ? filter.toLowerCase() : '';
     function chatMatches(chat) {
         if (!filterLower) return true;
@@ -650,8 +634,7 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
     const filteredChats = allChats.filter(chatMatches);
     const totalChats = filteredChats.length;
     const chatsToShow = filteredChats.slice(offset, offset + MAX_RECENT_CHATS);
-    // --- Render pinned and recent chats (filtered, paginated) ---
-    // Always render all pinned chats, not just those in the current page
+    // Render pinned and recent chats (filtered, paginated) (always render all pinned chats, not just those in the current page)
     const pinnedChatsRaw = getPinnedChats();
     const pinnedChats = pinnedChatsRaw.map(pinned => {
         // Try to find stat info from chatStatsMap
@@ -691,7 +674,7 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
     for (const chat of pinnedChats) {
         renderAllChatsTabItem(chat, container, true, null);
     }
-    // --- Render recent chats (filtered, skip pinned) ---
+    // Render recent chats (filtered, skip pinned)
     const pinnedSet = new Set(pinnedChats.map(chat => chat.characterId + ':' + chat.file_name));
     let lastDate = null;
     if (append) {
@@ -763,7 +746,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
         const chevron = document.createElement('i');
         chevron.className = 'fa-solid chevron fa-chevron-down';
         header.appendChild(chevron);
-        // --- Add pencil icon for renaming ---
+        // Add pencil icon for renaming
         const pencilIcon = document.createElement('i');
         pencilIcon.className = 'fa-solid fa-pencil-alt folder-rename-icon';
         pencilIcon.style.cursor = 'pointer';
@@ -773,12 +756,10 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
         folderTitle.className = 'folder-title';
         folderTitle.textContent = folder.name;
         header.appendChild(folderTitle);
-        // --- Remove double-click and timeout logic for rename ---
         header.addEventListener('click', (e) => {
-            // Expand/collapse if clicking chevron, folder icon, folder name, or header (not pencil)
+            // Expand/collapse if clicking chevron or header (not pencil)
             if (
                 e.target === chevron ||
-                e.target === folderIcon ||
                 e.target === folderTitle ||
                 e.currentTarget === e.target
             ) {
@@ -793,7 +774,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
                 }
             }
         });
-        // --- Helper function to show the rename folder popup
+        // Helper function to show the rename folder popup
         async function showRenameFolderPopup(folder) {
             const content = document.createElement('div');
             content.innerHTML = `<h3>Rename folder</h3>`;
@@ -828,7 +809,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
                 }
             }
         }
-        // --- Pencil icon click triggers rename popup ---
+        // Pencil icon click triggers rename popup
         pencilIcon.addEventListener('click', async (e) => {
             e.stopPropagation();
             await showRenameFolderPopup(folder);
@@ -839,7 +820,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
         removeBtn.innerHTML = '<i class="fa-solid fa-xmark icon-grey"></i>';
         removeBtn.onclick = async (e) => {
             e.stopPropagation();
-            // --- Folder preview for the remove confirmation popup ---
+            // Folder preview for the remove confirmation popup
             const folderPreview = document.createElement('div');
             folderPreview.style.display = 'flex';
             folderPreview.style.alignItems = 'center';
@@ -886,7 +867,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
             for (const chat of chats) renderAllChatsTabItem(chat, content, false, folder.id);
         }
         container.appendChild(folderSection);
-        // --- Render subfolders recursively inside content ---
+        // Render subfolders recursively inside content
         if (folder.children && folder.children.length > 0) {
             renderAllChatsFoldersUI(content, folderedChats, folder.children, level + 1);
         }
@@ -911,7 +892,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
     previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
     previewImg.alt = chat.character || '';
 
-    // --- Pencil icon for renaming chat ---
+    // Pencil icon for renaming chat
     const pencilIcon = document.createElement('i');
     pencilIcon.className = 'fa-solid fa-pencil-alt chat-rename-icon';
     pencilIcon.style.cursor = 'pointer';
@@ -942,18 +923,15 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
         });
         const result = await popup.show();
         if ((result === POPUP_RESULT.AFFIRMATIVE) && nameInput.value.trim() && nameInput.value.trim() !== chat.file_name) {
-            // --- Call renameGroupOrCharacterChat if available ---
-            if (typeof renameGroupOrCharacterChat === 'function') {
-                const context = SillyTavern.getContext();
-                const loader = document.getElementById('extensionAllChatsTabLoader') || null;
-                await renameGroupOrCharacterChat({
-                    characterId: chat.characterId,
-                    groupId: context.groupId,
-                    oldFileName: chat.file_name,
-                    newFileName: nameInput.value.trim(),
-                    loader
-                });
-            }
+            const context = SillyTavern.getContext();
+            const loader = document.getElementById('extensionAllChatsTabLoader') || null;
+            await renameGroupOrCharacterChat({
+                characterId: chat.characterId,
+                groupId: context.groupId,
+                oldFileName: chat.file_name,
+                newFileName: nameInput.value.trim(),
+                loader
+            });
             handleChatRename(chat, nameInput.value.trim());
             // Refresh UI after renaming
             if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
@@ -986,7 +964,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
     pinBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (folderId && folderId !== 'pinned') {
-            // --- Show a preview in the remove confirmation popup ---
+            // Show a preview in the remove confirmation popup 
             // Folder preview
             const folder = getFolders().find(f => f.id === folderId);
             const folderPreview = document.createElement('div');
@@ -1038,7 +1016,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             return;
         }
         if (isPinned) {
-            // --- Show a preview in the unpin confirmation popup ---
+            // Show a preview in the unpin confirmation popup
             const preview = document.createElement('div');
             preview.className = 'tabItem tabItem-singleline';
             preview.style.display = 'flex';
@@ -1071,7 +1049,6 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             return;
         }
         const selectedFolderId = await promptSelectFolderOrPinned(chat);
-        console.log(`Selected folder ID: ${selectedFolderId}`);
         if (selectedFolderId === 'pinned') {
             togglePinChat(chat);
             await populateAllChatsTab();
@@ -1230,7 +1207,7 @@ function renderExtensionSettings() {
     // =========================
     // Data Management Buttons (Import, Export, Wipe)
     // =========================
-    // --- Export/Import Buttons at Bottom ---
+    // Export/Import Buttons row at Bottom
     const exportImportRow = document.createElement('div');
     exportImportRow.style.display = 'flex';
     exportImportRow.style.gap = '10px';
@@ -1307,7 +1284,7 @@ function renderExtensionSettings() {
         inlineDrawerIcon.classList.toggle('up');
         inlineDrawerContent.classList.toggle('open');
     });
-    // --- Danger Zone (Wipe Button) ---
+    // Danger Zone (Wipe Button)
     const dangerZone = document.createElement('div');
     dangerZone.style.display = 'flex';
     dangerZone.style.justifyContent = 'flex-end';
@@ -1431,7 +1408,7 @@ function addTabToCharManagementMenu() {
         const nameRow = document.createElement('div');
         nameRow.className = 'tabItem-nameRow';
         nameRow.textContent = `${chat.character}: ${chat.file_name}`;
-        // --- Pencil icon for renaming chat ---
+        // Pencil icon for renaming chat 
         const pencilIcon = document.createElement('i');
         pencilIcon.className = 'fa-solid fa-pencil-alt chat-rename-icon';
         pencilIcon.style.cursor = 'pointer';
@@ -1462,18 +1439,15 @@ function addTabToCharManagementMenu() {
             });
             const result = await popup.show();
             if ((result === POPUP_RESULT.AFFIRMATIVE) && nameInput.value.trim() && nameInput.value.trim() !== chat.file_name) {
-                // --- Call renameGroupOrCharacterChat if available ---
-                if (typeof renameGroupOrCharacterChat === 'function') {
-                    const context = SillyTavern.getContext();
-                    const loader = document.getElementById('extensionAllChatsTabLoader') || null;
-                    await renameGroupOrCharacterChat({
-                        characterId: chat.characterId,
-                        groupId: context.groupId,
-                        oldFileName: chat.file_name,
-                        newFileName: nameInput.value.trim(),
-                        loader
-                    });
-                }
+                const context = SillyTavern.getContext();
+                const loader = document.getElementById('extensionAllChatsTabLoader') || null;
+                await renameGroupOrCharacterChat({
+                    characterId: chat.characterId,
+                    groupId: context.groupId,
+                    oldFileName: chat.file_name,
+                    newFileName: nameInput.value.trim(),
+                    loader
+                });
                 handleChatRename(chat, nameInput.value.trim());
                 // Refresh UI after renaming
                 if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();

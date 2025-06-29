@@ -281,6 +281,32 @@
     align-self: flex-end;
 }
 
+.filter-row {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    margin: 8px 4px 12px 4px;
+}
+.filter-input {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 1em;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background: #222;
+    color: #fff;
+    margin-right: 8px;
+}
+
+.allChatsTabLoader {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
 .allChatsDateSeparator {
     font-weight: bolder;
     font-size: calc(var(--mainFontSize) * 1.10);
