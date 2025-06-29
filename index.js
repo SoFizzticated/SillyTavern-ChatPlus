@@ -781,43 +781,38 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
         const chevron = document.createElement('i');
         chevron.className = 'fa-solid chevron fa-chevron-down';
         header.appendChild(chevron);
-        const folderIcon = document.createElement('i');
-        folderIcon.className = 'fa-solid fa-folder folder-title-icon';
-        header.appendChild(folderIcon);
+        // --- Add pencil icon for renaming ---
+        const pencilIcon = document.createElement('i');
+        pencilIcon.className = 'fa-solid fa-pencil-alt folder-rename-icon';
+        pencilIcon.style.cursor = 'pointer';
+        pencilIcon.style.margin = '0 6px 0 6px';
+        header.appendChild(pencilIcon);
         const folderTitle = document.createElement('span');
         folderTitle.className = 'folder-title';
         folderTitle.textContent = folder.name;
         header.appendChild(folderTitle);
-        // --- Add double-click to rename folder ---
-        let clickTimeout = null;
+        // --- Remove double-click and timeout logic for rename ---
         header.addEventListener('click', (e) => {
-            // Expand/collapse if clicking chevron, folder icon, or folder name
+            // Expand/collapse if clicking chevron, folder icon, folder name, or header (not pencil)
             if (
                 e.target === chevron ||
                 e.target === folderIcon ||
                 e.target === folderTitle ||
                 e.currentTarget === e.target
             ) {
-                // Wait to see if this is a double-click
-                if (clickTimeout) clearTimeout(clickTimeout);
-                clickTimeout = setTimeout(() => {
-                    // Only run if not interrupted by double-click
-                    folderSection.classList.toggle('collapsed');
-                    content.classList.toggle('collapsed');
-                    if (folderSection.classList.contains('collapsed')) {
-                        chevron.classList.remove('fa-chevron-down');
-                        chevron.classList.add('fa-chevron-right');
-                    } else {
-                        chevron.classList.remove('fa-chevron-right');
-                        chevron.classList.add('fa-chevron-down');
-                    }
-                }, 200); // 250ms: typical double-click threshold
+                folderSection.classList.toggle('collapsed');
+                content.classList.toggle('collapsed');
+                if (folderSection.classList.contains('collapsed')) {
+                    chevron.classList.remove('fa-chevron-down');
+                    chevron.classList.add('fa-chevron-right');
+                } else {
+                    chevron.classList.remove('fa-chevron-right');
+                    chevron.classList.add('fa-chevron-down');
+                }
             }
         });
-        folderTitle.addEventListener('dblclick', async (e) => {
-            if (clickTimeout) clearTimeout(clickTimeout); // Prevent single-click action
-            e.stopPropagation();
-            // Show popup to rename folder
+        // --- Helper function to show the rename folder popup
+        async function showRenameFolderPopup(folder) {
             const content = document.createElement('div');
             content.innerHTML = `<h3>Rename folder</h3>`;
             const nameInput = document.createElement('input');
@@ -840,7 +835,7 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
                 }
             });
             const result = await popup.show();
-            if (result !== POPUP_RESULT.CANCELLED && nameInput.value.trim() && nameInput.value.trim() !== folder.name) {
+            if ((result === POPUP_RESULT.AFFIRMATIVE) && nameInput.value.trim() && nameInput.value.trim() !== folder.name) {
                 // Update folder name
                 const folders = getFolders();
                 const idx = folders.findIndex(f => f.id === folder.id);
@@ -850,6 +845,11 @@ function renderAllChatsFoldersUI(container, folderedChats, folderNodes, level = 
                     await refreshFoldersTab();
                 }
             }
+        }
+        // --- Pencil icon click triggers rename popup ---
+        pencilIcon.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await showRenameFolderPopup(folder);
         });
         const removeBtn = document.createElement('button');
         removeBtn.className = 'removeFolderBtn';
