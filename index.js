@@ -10,8 +10,6 @@ import { debounce_timeout } from '../../../constants.js';
 import { t } from '../../../i18n.js';
 
 const {
-    eventSource,
-    event_types,
     getCurrentChatId,
     renameChat,
     getRequestHeaders,
@@ -25,7 +23,7 @@ const MODULE_NAME = 'chatsPlus';
 const defaultSettings = { pinnedChats: [] };
 if (!('folders' in defaultSettings)) defaultSettings.folders = [];
 if (!('chatFolders' in defaultSettings)) defaultSettings.chatFolders = {};
-const MAX_RECENT_CHATS = 200;
+const MAX_RECENT_CHATS = 100;
 
 // =========================
 // 2. Settings & State Management
@@ -427,12 +425,12 @@ async function getListOfCharacterChats(avatar) {
         if (!result.ok) return [];
         const data = await result.json();
         if (!Array.isArray(data)) {
-            console.error('Invalid chat data received for one of the characters:', data);
+            console.warn('Skipping character chats: data is not an array', data);
             return [];
         }
         return data.map(x => String(x.file_name).replace('.jsonl', ''));
     } catch (error) {
-        console.error('Failed to get list of character chats', error);
+        console.warn('Failed to get list of character chats, skipping', error);
         return [];
     }
 }
@@ -566,33 +564,57 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
         allChats = cache.allChats;
         chatStatsMap = cache.chatStatsMap;
     } else {
-        if (SillyTavern.getContext().characters) {
-            for (const [charId, char] of Object.entries(SillyTavern.getContext().characters)) {
-                try {
-                    const chats = await getListOfCharacterChats(char.avatar);
-                    for (const chatName of chats) {
-                        if (typeof chatName !== 'string' || !chatName) continue; // Skip invalid chat entries
-                        allChats.push({ character: char.name || charId, avatar: char.avatar, file_name: chatName, characterId: charId });
-                    }
-                } catch (e) { }
-            }
-        }
-        for (const chat of allChats) {
+        const context = SillyTavern.getContext();
+        const characters = context.characters || {};
+        // 1. Fetch all chat lists for all characters in parallel
+        const chatListPromises = Object.entries(characters).map(async ([charId, char]) => {
             try {
-                const statsList = await getPastCharacterChats(chat.characterId);
-                for (const stat of statsList) {
+                const chats = await getListOfCharacterChats(char.avatar);
+                return chats.filter(chatName => typeof chatName === 'string' && chatName).map(chatName => ({
+                    character: char.name || charId,
+                    avatar: char.avatar,
+                    file_name: chatName,
+                    characterId: charId
+                }));
+            } catch (e) {
+                return [];
+            }
+        });
+        const chatLists = await Promise.all(chatListPromises);
+        allChats = chatLists.flat();
+        // 2. Fetch all stats for all characters in parallel
+        const statsPromises = Object.keys(characters).map(async (charId) => {
+            try {
+                const statsList = await getPastCharacterChats(charId);
+                return statsList.map(stat => {
                     const fileName = String(stat.file_name).replace('.jsonl', '');
-                    chatStatsMap[chat.characterId + ':' + fileName] = stat;
-                }
-            } catch (e) { }
-        }
+                    return [charId + ':' + fileName, stat];
+                });
+            } catch (e) {
+                return [];
+            }
+        });
+        const statsEntries = (await Promise.all(statsPromises)).flat();
+        chatStatsMap = Object.fromEntries(statsEntries);
         if (setCache) setCache({ allChats, chatStatsMap });
     }
     allChats = allChats.map(chat => {
         const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
-        return { ...chat, stat, last_mes: stat && stat.last_mes ? new Date(stat.last_mes) : null };
+        let lastMesRaw = stat && stat.last_mes ? stat.last_mes : null;
+        let lastMesDate = null;
+        if (lastMesRaw) {
+            // Use timestampToMoment (dayjs wrapper) for robust parsing
+            const momentObj = timestampToMoment(lastMesRaw);
+            if (momentObj && momentObj.isValid()) {
+                lastMesDate = momentObj.toDate();
+            }
+        }
+        return { ...chat, stat, last_mes: lastMesDate };
     }).filter(chat => chat.last_mes);
+    // Ensure allChats is a flat array and sort strictly by date
+    console.log('[DEBUG] allChats before sort:', allChats.map(c => ({ character: c.character, file_name: c.file_name, last_mes: c.last_mes })));
     allChats.sort((a, b) => b.last_mes - a.last_mes);
+    console.log('[DEBUG] allChats after sort:', allChats.map(c => ({ character: c.character, file_name: c.file_name, last_mes: c.last_mes })));
     allChats = allChats.slice(0, MAX_RECENT_CHATS);
     // --- Filtering ---
     let filterLower = filter ? filter.toLowerCase() : '';
@@ -1415,7 +1437,16 @@ refreshFoldersTab = async function () {
     }
     allChats = allChats.map(chat => {
         const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
-        return { ...chat, stat, last_mes: stat && stat.last_mes ? new Date(stat.last_mes) : null };
+        let lastMesRaw = stat && stat.last_mes ? stat.last_mes : null;
+        let lastMesDate = null;
+        if (lastMesRaw) {
+            // Use timestampToMoment (dayjs wrapper) for robust parsing
+            const momentObj = timestampToMoment(lastMesRaw);
+            if (momentObj && momentObj.isValid()) {
+                lastMesDate = momentObj.toDate();
+            }
+        }
+        return { ...chat, stat, last_mes: lastMesDate };
     }).filter(chat => chat.last_mes);
     const folderedChats = {};
     const folders = getFolders();
