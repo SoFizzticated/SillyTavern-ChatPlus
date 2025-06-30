@@ -1416,7 +1416,7 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
             chatInfo = { ...chatInfo, stat };
         }
         return chatInfo;
-    }).filter(chat => chat && chat.last_mes);
+    }).filter(chat => chat && chat.last_mes && chatMatches(chat));
     // Sort pinned chats alphabetically by character, then file_name
     pinnedChats.sort((a, b) => {
         const charA = (a.character || '').toLowerCase();
@@ -1442,8 +1442,7 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
             renderAllChatsTabItem(chat, container, true, null);
         }
     }
-    // Render recent chats (filtered, skip pinned)
-    const pinnedSet = new Set(pinnedChats.map(chat => chat.characterId + ':' + chat.file_name));
+    // Render recent chats (filtered)
     let lastDate = null;
     if (append) {
         // Find the last date separator in the container
@@ -1454,7 +1453,6 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
         }
     }
     for (const chat of chatsToShow) {
-        if (pinnedSet.has(chat.characterId + ':' + chat.file_name)) continue;
         const stat = chat.stat;
         const chatMoment = stat && stat.last_mes ? timestampToMoment(stat.last_mes) : null;
         const chatDateStr = chatMoment ? chatMoment.format('YYYY-MM-DD') : '';
