@@ -1813,6 +1813,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             if (result === POPUP_RESULT.AFFIRMATIVE) {
                 togglePinChat(chat);
                 await populateAllChatsTab();
+                await refreshFoldersTab();
             }
             return;
         }
@@ -1820,6 +1821,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
         if (selectedFolderId === 'pinned') {
             togglePinChat(chat);
             await populateAllChatsTab();
+            await refreshFoldersTab();
         } else if (selectedFolderId) {
             const folderIds = getChatFolderIds(chat);
             if (!folderIds.includes(selectedFolderId)) assignChatToFolder(chat, selectedFolderId);
