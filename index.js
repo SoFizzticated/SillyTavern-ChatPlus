@@ -3,9 +3,11 @@
 // =========================
 import { addJQueryHighlight } from './jquery-highlight.js';
 import { getGroupPastChats } from '../../../group-chats.js';
-import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat } from '../../../../script.js';
+import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat, event_types } from '../../../../script.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { timestampToMoment } from '../../../utils.js';
+import { uploadFileAttachmentToServer, deleteAttachment, getFileAttachment } from '../../../chats.js';
+import { extension_settings } from '../../../extensions.js';
 import { t } from '../../../i18n.js';
 
 const {
@@ -15,13 +17,18 @@ const {
     openCharacterChat,
     getThumbnailUrl,
     extensionSettings,
-    saveSettingsDebounced
+    saveSettingsDebounced,
+    eventSource
 } = SillyTavern.getContext();
 const MODULE_NAME = 'chatsPlus';
-const defaultSettings = { pinnedChats: [] };
+const defaultSettings = {
+    pinnedChats: [],
+    autoBackup: true
+};
 if (!('folders' in defaultSettings)) defaultSettings.folders = [];
 if (!('chatFolders' in defaultSettings)) defaultSettings.chatFolders = {};
 const MAX_RECENT_CHATS = 100;
+const MAX_BACKUP_SESSIONS = 4;
 
 // =========================
 // 2. Settings & State Management
@@ -196,6 +203,757 @@ function getChatFolderIds(chat) {
 function getChatFolderId(chat) {
     const ids = getChatFolderIds(chat);
     return ids.length > 0 ? ids[0] : null;
+}
+
+// =========================
+// 2.5. Backup System
+// =========================
+
+const BACKUP_STORAGE_KEY = 'chatsPlusBackupVersions';
+
+/**
+ * Get the current date string (YYYY-MM-DD) for backup organization.
+ * @returns {string} Date string in YYYY-MM-DD format.
+ */
+function getDateString() {
+    return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Get existing backup versions from localStorage.
+ * @returns {Array} Array of backup version objects.
+ */
+function getBackupVersions() {
+    try {
+        return JSON.parse(localStorage.getItem(BACKUP_STORAGE_KEY) || '[]');
+    } catch (error) {
+        console.warn('Failed to parse backup versions from localStorage:', error);
+        return [];
+    }
+}
+
+/**
+ * Save backup versions to localStorage.
+ * @param {Array} versions - Array of backup version objects.
+ */
+function setBackupVersions(versions) {
+    try {
+        localStorage.setItem(BACKUP_STORAGE_KEY, JSON.stringify(versions));
+    } catch (error) {
+        console.error('Failed to save backup versions to localStorage:', error);
+    }
+}
+
+/**
+ * Create a backup of the current extension settings.
+ * Keeps track of the last few login sessions and rotates them out.
+ * @returns {Promise<boolean>} True if backup was successful, false otherwise.
+ */
+async function createBackup() {
+    try {
+        const currentDate = getDateString();
+        let versions = getBackupVersions();
+
+        // Check if we already have a backup for today
+        const todayBackup = versions.find(v => v.date === currentDate);
+        if (todayBackup) {
+            // Update today's backup by deleting the old one first
+            try {
+                const attachment = {
+                    url: todayBackup.url,
+                    name: todayBackup.fileName,
+                    size: 0, // We don't track size for backups
+                    created: todayBackup.created
+                };
+                await deleteAttachment(attachment, 'global', () => { }, false);
+            } catch (error) {
+                console.warn('Failed to delete existing backup for today:', error);
+            }
+
+            // Remove today's backup from the list
+            versions = versions.filter(v => v.date !== currentDate);
+        }
+
+        // Rotate old backups if we have too many different sessions
+        const uniqueDates = [...new Set(versions.map(v => v.date))].sort();
+        while (uniqueDates.length >= MAX_BACKUP_SESSIONS) {
+            const oldestDate = uniqueDates.shift();
+            const oldBackups = versions.filter(v => v.date === oldestDate);
+
+            // Delete old backups from server
+            for (const backup of oldBackups) {
+                try {
+                    const attachment = {
+                        url: backup.url,
+                        name: backup.fileName,
+                        size: 0, // We don't track size for backups
+                        created: backup.created
+                    };
+                    await deleteAttachment(attachment, backup.source, () => { }, false);
+                } catch (error) {
+                    console.warn('Failed to delete old backup:', error);
+                }
+            }
+
+            // Remove old backups from the list
+            versions = versions.filter(v => v.date !== oldestDate);
+        }
+
+        // Create new backup
+        const settings = extensionSettings[MODULE_NAME] || {};
+        const json = JSON.stringify(settings, null, 2);
+        const fileName = `chatsplus_backup_${currentDate}_${Date.now()}.json`;
+        const file = new File([json], fileName, { type: 'application/json' });
+
+        const url = await uploadFileAttachmentToServer(file, 'global');
+
+        if (!url) {
+            console.error('Failed to upload backup file');
+            return false;
+        }
+
+        // Store the new backup info
+        const newBackup = {
+            url,
+            fileName,
+            date: currentDate,
+            created: Date.now(),
+            source: 'global'
+        };
+
+        versions.push(newBackup);
+        setBackupVersions(versions);
+
+        // Disable the backup attachment so it doesn't appear in chat context
+        await disableBackupAttachment(newBackup);
+
+        console.log(`ChatsPlus backup created successfully: ${fileName}`);
+        return true;
+    } catch (error) {
+        console.error('Failed to create ChatsPlus backup:', error);
+        return false;
+    }
+}
+
+/**
+ * Restore extension settings from a backup.
+ * @param {Object} backup - Backup object containing url and other metadata.
+ * @returns {Promise<boolean>} True if restore was successful, false otherwise.
+ */
+async function restoreFromBackup(backup) {
+    try {
+        const data = await getFileAttachment(backup.url);
+        const settings = JSON.parse(data);
+
+        // Restore the settings
+        extensionSettings[MODULE_NAME] = settings;
+        saveSettingsDebounced();
+
+        console.log(`ChatsPlus settings restored from backup: ${backup.fileName}`);
+        return true;
+    } catch (error) {
+        console.error('Failed to restore from backup:', error);
+        return false;
+    }
+}
+
+/**
+ * Get a list of available backups for the backup management UI.
+ * @returns {Array} Array of backup objects sorted by date (newest first).
+ */
+function getAvailableBackups() {
+    return getBackupVersions()
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+/**
+ * Delete a specific backup.
+ * @param {Object} backup - Backup object to delete.
+ * @returns {Promise<boolean>} True if deletion was successful, false otherwise.
+ */
+async function deleteBackup(backup) {
+    try {
+        const attachment = {
+            url: backup.url,
+            name: backup.fileName,
+            size: 0, // We don't track size for backups
+            created: backup.created
+        };
+        await deleteAttachment(attachment, backup.source, () => { }, false);
+
+        // Remove from localStorage
+        let versions = getBackupVersions();
+        versions = versions.filter(v => v.url !== backup.url);
+        setBackupVersions(versions);
+
+        console.log(`ChatsPlus backup deleted: ${backup.fileName}`);
+        return true;
+    } catch (error) {
+        console.error('Failed to delete backup:', error);
+        return false;
+    }
+}
+
+/**
+ * Initialize the backup system - create a backup if needed and auto-backup is enabled.
+ * Should be called during extension initialization.
+ */
+async function initializeBackupSystem() {
+    try {
+        // First, ensure all existing backup files are disabled
+        await disableAllBackupAttachments();
+
+        const settings = getSettings();
+
+        // Check if auto-backup is disabled
+        if (settings.autoBackup === false) {
+            console.log('ChatsPlus auto-backup is disabled');
+            return;
+        }
+
+        const currentDate = getDateString();
+        const versions = getBackupVersions();
+
+        // Check if we already have a backup for today
+        const todayBackup = versions.find(v => v.date === currentDate);
+
+        if (!todayBackup) {
+            // Create a backup for this login session
+            await createBackup();
+        } else {
+            // Ensure existing backup is disabled in attachments
+            await disableBackupAttachment(todayBackup);
+        }
+    } catch (error) {
+        console.warn('Failed to initialize backup system:', error);
+    }
+}
+
+/**
+ * Show the backup manager popup with list of backups and restore/delete options.
+ */
+async function showBackupManager() {
+    const backups = getAvailableBackups();
+
+    const content = document.createElement('div');
+    content.innerHTML = `<h3>${t`Backup Manager`}</h3>`;
+
+    if (backups.length === 0) {
+        content.innerHTML += `<p>${t`No login session backups found.`}</p>`;
+    } else {
+        content.innerHTML += `<p>${t`Select a login session backup to restore or delete:`}</p>`;
+        content.innerHTML += `<p style="font-size: 0.9em; color: #666; margin-bottom: 16px;">${t`Backups are automatically created when you login and contain your extension settings from that time.`}</p>`;
+
+        const backupList = document.createElement('div');
+        backupList.style.maxHeight = '300px';
+        backupList.style.overflowY = 'auto';
+        backupList.style.border = '1px solid #ccc';
+        backupList.style.borderRadius = '4px';
+        backupList.style.padding = '8px';
+        backupList.style.margin = '8px 0';
+
+        backups.forEach(backup => {
+            const backupItem = document.createElement('div');
+            backupItem.style.display = 'flex';
+            backupItem.style.justifyContent = 'space-between';
+            backupItem.style.alignItems = 'center';
+            backupItem.style.padding = '8px';
+            backupItem.style.borderBottom = '1px solid #eee';
+            backupItem.style.fontSize = '0.9em';
+
+            const backupInfo = document.createElement('div');
+            const createdDate = new Date(backup.created);
+            backupInfo.innerHTML = `
+                <div style="font-weight: bold;">${backup.date}</div>
+                <div style="color: #666; font-size: 0.8em;">${createdDate.toLocaleString()}</div>
+                <div style="color: #666; font-size: 0.8em;">${backup.fileName}</div>
+            `;
+
+            const backupActions = document.createElement('div');
+            backupActions.style.display = 'flex';
+            backupActions.style.gap = '6px';
+            backupActions.style.flexWrap = 'wrap';
+
+            const previewBtn = document.createElement('button');
+            previewBtn.textContent = t`Preview`;
+            previewBtn.style.background = '#17a';
+            previewBtn.style.color = '#fff';
+            previewBtn.style.border = 'none';
+            previewBtn.style.padding = '4px 8px';
+            previewBtn.style.borderRadius = '4px';
+            previewBtn.style.fontSize = '0.8em';
+            previewBtn.onclick = async () => {
+                previewBtn.disabled = true;
+                previewBtn.textContent = t`Loading...`;
+
+                try {
+                    const backupData = await getBackupData(backup);
+                    if (backupData) {
+                        const previewContent = document.createElement('div');
+                        previewContent.className = 'pin-popup-content';
+                        previewContent.innerHTML = `<h3>${t`Login Session Backup Preview - ${backup.date}`}</h3>`;
+
+                        const preview = generateBackupPreview(backupData);
+                        previewContent.appendChild(preview);
+
+                        const previewPopup = new Popup(previewContent, POPUP_TYPE.TEXT, '', {
+                            okButton: t`Close`,
+                            wide: true,
+                            large: true
+                        });
+
+                        await previewPopup.show();
+                    } else {
+                        alert(t`Failed to load backup data for preview.`);
+                    }
+                } catch (error) {
+                    alert(t`Failed to preview backup: ` + error.message);
+                } finally {
+                    previewBtn.disabled = false;
+                    previewBtn.textContent = t`Preview`;
+                }
+            };
+
+            const downloadBtn = document.createElement('button');
+            downloadBtn.textContent = t`Download`;
+            downloadBtn.style.background = '#f39c12';
+            downloadBtn.style.color = '#fff';
+            downloadBtn.style.border = 'none';
+            downloadBtn.style.padding = '4px 8px';
+            downloadBtn.style.borderRadius = '4px';
+            downloadBtn.style.fontSize = '0.8em';
+            downloadBtn.onclick = async () => {
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = t`Downloading...`;
+
+                try {
+                    await downloadBackup(backup);
+                } catch (error) {
+                    // Error handling is done in downloadBackup function
+                } finally {
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = t`Download`;
+                }
+            };
+
+            const restoreBtn = document.createElement('button');
+            restoreBtn.textContent = t`Restore`;
+            restoreBtn.style.background = '#27a';
+            restoreBtn.style.color = '#fff';
+            restoreBtn.style.border = 'none';
+            restoreBtn.style.padding = '4px 8px';
+            restoreBtn.style.borderRadius = '4px';
+            restoreBtn.style.fontSize = '0.8em';
+            restoreBtn.onclick = async () => {
+                // First, get backup data for preview
+                const backupData = await getBackupData(backup);
+                if (!backupData) {
+                    alert(t`Failed to load backup data. Cannot restore.`);
+                    return;
+                }
+
+                const confirmContent = document.createElement('div');
+                confirmContent.className = 'pin-popup-content';
+                confirmContent.innerHTML = `
+                    <h3>${t`Restore Login Session Backup?`}</h3>
+                    <p>${t`This will replace your current settings with the backup from ${backup.date}.`}</p>
+                    <p style="color: #a33;"><strong>${t`This action cannot be undone!`}</strong></p>
+                `;
+
+                // Add preview to confirmation dialog
+                const preview = generateBackupPreview(backupData);
+                confirmContent.appendChild(preview);
+
+                const confirmPopup = new Popup(confirmContent, POPUP_TYPE.CONFIRM, '', {
+                    okButton: t`Restore`,
+                    cancelButton: t`Cancel`,
+                    wide: true,
+                    large: true
+                });
+
+                const confirmResult = await confirmPopup.show();
+                if (confirmResult === POPUP_RESULT.AFFIRMATIVE) {
+                    restoreBtn.disabled = true;
+                    restoreBtn.textContent = t`Restoring...`;
+
+                    try {
+                        const success = await restoreFromBackup(backup);
+                        if (success) {
+                            alert(t`Settings restored successfully! The page will reload.`);
+                            location.reload();
+                        } else {
+                            alert(t`Failed to restore backup. Check console for details.`);
+                        }
+                    } catch (error) {
+                        alert(t`Failed to restore backup: ` + error.message);
+                    } finally {
+                        restoreBtn.disabled = false;
+                        restoreBtn.textContent = t`Restore`;
+                    }
+                }
+            };
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = t`Delete`;
+            deleteBtn.style.background = '#a33';
+            deleteBtn.style.color = '#fff';
+            deleteBtn.style.border = 'none';
+            deleteBtn.style.padding = '4px 8px';
+            deleteBtn.style.borderRadius = '4px';
+            deleteBtn.style.fontSize = '0.8em';
+            deleteBtn.onclick = async () => {
+                const confirmContent = document.createElement('div');
+                confirmContent.innerHTML = `
+                    <h3>${t`Delete Login Session Backup?`}</h3>
+                    <p>${t`Are you sure you want to delete the backup from ${backup.date}?`}</p>
+                `;
+
+                const confirmPopup = new Popup(confirmContent, POPUP_TYPE.CONFIRM, '', {
+                    okButton: t`Delete`,
+                    cancelButton: t`Cancel`
+                });
+
+                const confirmResult = await confirmPopup.show();
+                if (confirmResult === POPUP_RESULT.AFFIRMATIVE) {
+                    deleteBtn.disabled = true;
+                    deleteBtn.textContent = t`Deleting...`;
+
+                    try {
+                        const success = await deleteBackup(backup);
+                        if (success) {
+                            backupItem.remove();
+                            if (backupList.children.length === 0) {
+                                backupList.innerHTML = `<p style="text-align: center; color: #666;">${t`No backups remaining.`}</p>`;
+                            }
+                        } else {
+                            alert(t`Failed to delete backup. Check console for details.`);
+                        }
+                    } catch (error) {
+                        alert(t`Failed to delete backup: ` + error.message);
+                    } finally {
+                        deleteBtn.disabled = false;
+                        deleteBtn.textContent = t`Delete`;
+                    }
+                }
+            };
+
+            backupActions.appendChild(previewBtn);
+            backupActions.appendChild(downloadBtn);
+            backupActions.appendChild(restoreBtn);
+            backupActions.appendChild(deleteBtn);
+
+            backupItem.appendChild(backupInfo);
+            backupItem.appendChild(backupActions);
+            backupList.appendChild(backupItem);
+        });
+
+        content.appendChild(backupList);
+    }
+
+    const popup = new Popup(content, POPUP_TYPE.TEXT, '', {
+        okButton: t`Close`,
+        wide: true,
+        large: true
+    });
+
+    await popup.show();
+}
+
+/**
+ * Get backup data from server for preview purposes.
+ * @param {Object} backup - Backup object containing url and other metadata.
+ * @returns {Promise<Object|null>} Backup data object or null if failed.
+ */
+async function getBackupData(backup) {
+    try {
+        const data = await getFileAttachment(backup.url);
+        return JSON.parse(data);
+    } catch (error) {
+        console.error('Failed to get backup data:', error);
+        return null;
+    }
+}
+
+/**
+ * Generate a preview of what will be restored from a backup.
+ * @param {Object} backupData - The backup data object.
+ * @returns {HTMLElement} Preview container element.
+ */
+function generateBackupPreview(backupData) {
+    const previewContainer = document.createElement('div');
+    previewContainer.className = 'chatplus_radio_group';
+
+    // Preview title
+    const previewTitle = document.createElement('div');
+    previewTitle.style.fontWeight = 'bold';
+    previewTitle.style.marginBottom = '8px';
+    previewTitle.textContent = t`Preview of what will be restored:`;
+    previewContainer.appendChild(previewTitle);
+
+    // Pinned chats preview
+    const pinnedChats = backupData.pinnedChats || [];
+    if (pinnedChats.length > 0) {
+        // Separator before pinned section
+        const separatorBeforePinned = document.createElement('hr');
+        separatorBeforePinned.style.margin = '8px 0';
+        previewContainer.appendChild(separatorBeforePinned);
+
+        const pinnedLabel = document.createElement('label');
+        pinnedLabel.style.display = 'flex';
+        pinnedLabel.style.alignItems = 'center';
+        pinnedLabel.innerHTML = ` 📌 ${t`Pinned Chats`} (${pinnedChats.length})`;
+        previewContainer.appendChild(pinnedLabel);
+
+        // Pinned chats preview container
+        const pinnedPreviewContainer = document.createElement('div');
+        pinnedPreviewContainer.className = 'pinned-preview-chats';
+        pinnedPreviewContainer.style.marginLeft = '32px';
+        pinnedPreviewContainer.style.marginBottom = '4px';
+
+        pinnedChats.slice(0, 5).forEach(pinned => {
+            // Find character info for the pinned chat
+            let char = null;
+            if (SillyTavern.getContext().characters && SillyTavern.getContext().characters[pinned.characterId]) {
+                char = SillyTavern.getContext().characters[pinned.characterId];
+            }
+
+            const chat = {
+                character: char ? (char.name || pinned.characterId) : pinned.characterId,
+                avatar: char ? char.avatar : '',
+                file_name: pinned.file_name,
+                characterId: pinned.characterId
+            };
+
+            // Render preview using .tabItem-singleline style
+            const tabItem = document.createElement('div');
+            tabItem.classList.add('tabItem', 'tabItem-singleline');
+            tabItem.style.display = 'flex';
+            tabItem.style.flexDirection = 'row';
+            tabItem.style.alignItems = 'center';
+            tabItem.style.gap = '10px';
+            tabItem.style.marginBottom = '2px';
+
+            const previewImg = document.createElement('img');
+            previewImg.className = 'tabItem-previewImg';
+            previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+            previewImg.alt = chat.character || '';
+
+            const nameRow = document.createElement('div');
+            nameRow.className = 'tabItem-nameRow';
+            nameRow.textContent = `${chat.character}: ${chat.file_name}`;
+
+            tabItem.appendChild(previewImg);
+            tabItem.appendChild(nameRow);
+            pinnedPreviewContainer.appendChild(tabItem);
+        });
+
+        if (pinnedChats.length > 5) {
+            const moreItem = document.createElement('div');
+            moreItem.style.fontSize = '0.9em';
+            moreItem.style.color = '#888';
+            moreItem.style.marginLeft = '4px';
+            moreItem.textContent = `+${pinnedChats.length - 5} more`;
+            pinnedPreviewContainer.appendChild(moreItem);
+        }
+
+        previewContainer.appendChild(pinnedPreviewContainer);
+    }
+
+    // Folders preview
+    const folders = backupData.folders || [];
+    if (folders.length > 0) {
+        // Separator before folders section
+        const separatorBeforeFolders = document.createElement('hr');
+        separatorBeforeFolders.style.margin = '8px 0';
+        previewContainer.appendChild(separatorBeforeFolders);
+
+        // Build folder tree like in the pin popup
+        function buildFolderTree(folders) {
+            const map = {};
+            const roots = [];
+
+            folders.forEach(folder => {
+                map[folder.id] = { ...folder, children: [] };
+            });
+
+            folders.forEach(folder => {
+                if (folder.parent && map[folder.parent]) {
+                    map[folder.parent].children.push(map[folder.id]);
+                } else {
+                    roots.push(map[folder.id]);
+                }
+            });
+
+            return roots;
+        }
+
+        function renderFolderTree(nodes, container, level = 0) {
+            nodes.forEach(folder => {
+                const folderLabel = document.createElement('label');
+                folderLabel.style.display = 'flex';
+                folderLabel.style.alignItems = 'center';
+                folderLabel.style.marginLeft = (level * 20) + 'px';
+                folderLabel.appendChild(document.createTextNode(' 📁 ' + folder.name));
+                container.appendChild(folderLabel);
+
+                // Chat preview for this folder
+                const folderChats = Object.entries(backupData.chatFolders || {})
+                    .filter(([key, ids]) => Array.isArray(ids) && ids.includes(folder.id))
+                    .map(([key]) => {
+                        const [characterId, file_name] = key.split(':');
+                        return { characterId, file_name };
+                    });
+
+                if (folderChats.length > 0) {
+                    const folderPreviewContainer = document.createElement('div');
+                    folderPreviewContainer.className = 'folder-preview-chats';
+                    folderPreviewContainer.style.marginLeft = (level * 20 + 32) + 'px';
+                    folderPreviewContainer.style.marginBottom = '4px';
+
+                    folderChats.slice(0, 3).forEach(chatObj => {
+                        // Find character info
+                        let char = null;
+                        if (SillyTavern.getContext().characters && SillyTavern.getContext().characters[chatObj.characterId]) {
+                            char = SillyTavern.getContext().characters[chatObj.characterId];
+                        }
+                        const chat = {
+                            character: char ? (char.name || chatObj.characterId) : chatObj.characterId,
+                            avatar: char ? char.avatar : '',
+                            file_name: chatObj.file_name,
+                            characterId: chatObj.characterId
+                        };
+
+                        // Render preview using .tabItem-singleline style
+                        const tabItem = document.createElement('div');
+                        tabItem.classList.add('tabItem', 'tabItem-singleline');
+                        tabItem.style.display = 'flex';
+                        tabItem.style.flexDirection = 'row';
+                        tabItem.style.alignItems = 'center';
+                        tabItem.style.gap = '10px';
+                        tabItem.style.marginBottom = '2px';
+
+                        const previewImg = document.createElement('img');
+                        previewImg.className = 'tabItem-previewImg';
+                        previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+                        previewImg.alt = chat.character || '';
+
+                        const nameRow = document.createElement('div');
+                        nameRow.className = 'tabItem-nameRow';
+                        nameRow.textContent = `${chat.character}: ${chat.file_name}`;
+
+                        tabItem.appendChild(previewImg);
+                        tabItem.appendChild(nameRow);
+                        folderPreviewContainer.appendChild(tabItem);
+                    });
+
+                    if (folderChats.length > 3) {
+                        const more = document.createElement('div');
+                        more.style.fontSize = '0.9em';
+                        more.style.color = '#888';
+                        more.style.marginLeft = '4px';
+                        more.textContent = `+${folderChats.length - 3} more`;
+                        folderPreviewContainer.appendChild(more);
+                    }
+                    container.appendChild(folderPreviewContainer);
+                }
+
+                if (folder.children && folder.children.length > 0) {
+                    renderFolderTree(folder.children, container, level + 1);
+                }
+            });
+        }
+
+        const folderTree = buildFolderTree(folders);
+        renderFolderTree(folderTree, previewContainer, 0);
+    }
+
+    // Chat folder assignments preview
+    const chatFolders = backupData.chatFolders || {};
+    const assignmentCount = Object.keys(chatFolders).length;
+    if (assignmentCount > 0) {
+        // Separator before assignments section
+        const separatorBeforeAssignments = document.createElement('hr');
+        separatorBeforeAssignments.style.margin = '8px 0';
+        previewContainer.appendChild(separatorBeforeAssignments);
+
+        const assignmentsLabel = document.createElement('label');
+        assignmentsLabel.style.display = 'flex';
+        assignmentsLabel.style.alignItems = 'center';
+        assignmentsLabel.innerHTML = ` 🔗 ${t`Chat-Folder Assignments`} (${assignmentCount})`;
+        previewContainer.appendChild(assignmentsLabel);
+    }
+
+    // Summary if nothing to show
+    if (pinnedChats.length === 0 && folders.length === 0 && assignmentCount === 0) {
+        const emptyNote = document.createElement('div');
+        emptyNote.className = 'emptyFolderMessage';
+        emptyNote.textContent = t`No pinned chats or folders in this backup.`;
+        previewContainer.appendChild(emptyNote);
+    }
+
+    return previewContainer;
+}
+
+/**
+ * Download a backup file to the user's device.
+ * @param {Object} backup - Backup object to download.
+ */
+async function downloadBackup(backup) {
+    try {
+        const data = await getFileAttachment(backup.url);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = backup.fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+    } catch (error) {
+        alert(t`Failed to download backup: ` + error.message);
+    }
+}
+
+/**
+ * Disable a backup attachment so it doesn't appear in chat context.
+ * @param {Object} backup - Backup object containing url and other metadata.
+ */
+async function disableBackupAttachment(backup) {
+    try {
+        // Add to disabled attachments list using URL as identifier
+        if (!extension_settings.disabled_attachments) {
+            extension_settings.disabled_attachments = [];
+        }
+
+        // Check if already disabled
+        const isAlreadyDisabled = extension_settings.disabled_attachments.includes(backup.url);
+
+        if (!isAlreadyDisabled) {
+            extension_settings.disabled_attachments.push(backup.url);
+            console.log(`ChatsPlus backup attachment disabled: ${backup.fileName}`);
+        }
+    } catch (error) {
+        console.warn('Failed to disable backup attachment:', error);
+    }
+}
+
+/**
+ * Ensure all existing backup files are disabled as attachments.
+ * This should be called during extension initialization.
+ */
+async function disableAllBackupAttachments() {
+    try {
+        const versions = getBackupVersions();
+        for (const backup of versions) {
+            await disableBackupAttachment(backup);
+        }
+        console.log(`ChatsPlus: Ensured ${versions.length} backup attachments are disabled`);
+    } catch (error) {
+        console.warn('Failed to disable existing backup attachments:', error);
+    }
 }
 
 // =========================
@@ -672,8 +1430,17 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
         return 0;
     });
     // Render all pinned chats at the top
-    for (const chat of pinnedChats) {
-        renderAllChatsTabItem(chat, container, true, null);
+    if (pinnedChats.length > 0) {
+        // Add pinned section header
+        const pinnedSeparator = document.createElement('div');
+        pinnedSeparator.className = 'allChatsDateSeparator pinned-section-header';
+        pinnedSeparator.textContent = '📌 ' + t`Pinned Chats`;
+        pinnedSeparator.style.fontWeight = 'bold';
+        container.appendChild(pinnedSeparator);
+
+        for (const chat of pinnedChats) {
+            renderAllChatsTabItem(chat, container, true, null);
+        }
     }
     // Render recent chats (filtered, skip pinned)
     const pinnedSet = new Set(pinnedChats.map(chat => chat.characterId + ':' + chat.file_name));
@@ -1208,11 +1975,18 @@ function renderExtensionSettings() {
     // =========================
     // Data Management Buttons (Import, Export, Wipe)
     // =========================
+    // Header for Import/Export section
+    const importExportHeader = document.createElement('div');
+    importExportHeader.style.margin = '16px 0 4px 0';
+    importExportHeader.style.fontWeight = 'bold';
+    importExportHeader.textContent = t`Import/Export current extension data:`;
+    inlineDrawerContent.appendChild(importExportHeader);
+
     // Export/Import Buttons row at Bottom
     const exportImportRow = document.createElement('div');
     exportImportRow.style.display = 'flex';
     exportImportRow.style.gap = '10px';
-    exportImportRow.style.margin = '24px 0 0 0';
+    exportImportRow.style.margin = '8px 0';
 
     // Import Button
     const importBtn = document.createElement('button');
@@ -1278,6 +2052,88 @@ function renderExtensionSettings() {
     exportImportRow.appendChild(importBtn);
     exportImportRow.appendChild(exportBtn);
     inlineDrawerContent.appendChild(exportImportRow);
+
+    // =========================
+    // Backup Management Section
+    // =========================
+    const backupSection = document.createElement('div');
+    backupSection.style.margin = '16px 0';
+    backupSection.innerHTML = `<b>${t`Backup Management:`}</b>`;
+
+    const backupDescription = document.createElement('p');
+    backupDescription.style.margin = '4px 0 8px 0';
+    backupDescription.style.fontSize = '0.9em';
+    backupDescription.style.color = '#888';
+    backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created the first time you log in on each new day, for up to ${MAX_BACKUP_SESSIONS} different days. Backups are stored server-side and older backups are rotated out automatically.`;
+    backupSection.appendChild(backupDescription);
+
+    // Auto-backup toggle
+    const autoBackupCheckboxLabel = document.createElement('label');
+    autoBackupCheckboxLabel.classList.add('checkbox_label');
+    autoBackupCheckboxLabel.htmlFor = `${settingsKey}-autoBackup`;
+    autoBackupCheckboxLabel.style.margin = '8px 0';
+    autoBackupCheckboxLabel.style.display = 'block';
+
+    const autoBackupCheckbox = document.createElement('input');
+    autoBackupCheckbox.id = `${settingsKey}-autoBackup`;
+    autoBackupCheckbox.type = 'checkbox';
+    autoBackupCheckbox.checked = settings.autoBackup ?? true;
+    autoBackupCheckbox.addEventListener('change', () => {
+        settings.autoBackup = autoBackupCheckbox.checked;
+        context.saveSettingsDebounced();
+    });
+
+    const autoBackupCheckboxText = document.createElement('span');
+    autoBackupCheckboxText.textContent = t`Enable automatic backups on login`;
+    autoBackupCheckboxLabel.append(autoBackupCheckbox, autoBackupCheckboxText);
+    backupSection.appendChild(autoBackupCheckboxLabel);
+
+    const backupButtonsRow = document.createElement('div');
+    backupButtonsRow.style.display = 'flex';
+    backupButtonsRow.style.gap = '10px';
+    backupButtonsRow.style.margin = '8px 0';
+
+    // Create Backup Button
+    const createBackupBtn = document.createElement('button');
+    createBackupBtn.textContent = t`Create Backup`;
+    createBackupBtn.className = 'settings-action-btn';
+    createBackupBtn.style.background = '#17a';
+    createBackupBtn.style.color = '#fff';
+    createBackupBtn.style.border = 'none';
+    createBackupBtn.onclick = async () => {
+        createBackupBtn.disabled = true;
+        createBackupBtn.textContent = t`Creating...`;
+        try {
+            const success = await createBackup();
+            if (success) {
+                alert(t`Backup created successfully!`);
+            } else {
+                alert(t`Failed to create backup. Check console for details.`);
+            }
+        } catch (error) {
+            alert(t`Failed to create backup: ` + error.message);
+        } finally {
+            createBackupBtn.disabled = false;
+            createBackupBtn.textContent = t`Create Backup`;
+        }
+    };
+
+    // Manage Backups Button
+    const manageBackupsBtn = document.createElement('button');
+    manageBackupsBtn.textContent = t`Manage Backups`;
+    manageBackupsBtn.className = 'settings-action-btn';
+    manageBackupsBtn.style.background = '#777';
+    manageBackupsBtn.style.color = '#fff';
+    manageBackupsBtn.style.border = 'none';
+    manageBackupsBtn.onclick = async () => {
+        await showBackupManager();
+    };
+
+    backupButtonsRow.appendChild(createBackupBtn);
+    backupButtonsRow.appendChild(manageBackupsBtn);
+    backupSection.appendChild(backupButtonsRow);
+
+    inlineDrawerContent.appendChild(backupSection);
     inlineDrawer.append(inlineDrawerToggle, inlineDrawerContent);
     inlineDrawerToggle.addEventListener('click', function () {
         this.classList.toggle('open');
@@ -1724,6 +2580,7 @@ refreshFoldersTab = async function () {
     }
 };
 
+
 // =========================
 // 8. Initialization
 // =========================
@@ -1744,6 +2601,9 @@ refreshFoldersTab = async function () {
     // Initialize the extension
     addJQueryHighlight();
     addTabToCharManagementMenu();
+
+    // Initialize backup system
+    initializeBackupSystem();
 
     // Activate the default tab on startup
     const defaultTab = settings.defaultTab ?? 'characters';
@@ -1771,6 +2631,14 @@ refreshFoldersTab = async function () {
             if (typeof activateTab === 'function') activateTab(0);
         });
     }
+
+    // Listen for character rename events
+    if (eventSource && event_types && event_types.CHARACTER_RENAMED) {
+        eventSource.on(event_types.CHARACTER_RENAMED, handleCharacterRename);
+    }
+
+    // Disable all existing backup attachments on initialization
+    disableAllBackupAttachments();
 })();
 
 /**
@@ -1809,5 +2677,157 @@ function handleChatRename(chat, newName) {
         map[newKey] = map[oldKey];
         delete map[oldKey];
         setChatFoldersMap(map);
+    }
+}
+
+/**
+ * Update all internal references when a character is renamed.
+ * Since character IDs get reassigned during rename, we need to use avatar paths
+ * as the stable identifier and defer the update to when character data is refreshed.
+ * @param {string} oldAvatar - The old character avatar/identifier.
+ * @param {string} newAvatar - The new character avatar/identifier.
+ */
+function handleCharacterRename(oldAvatar, newAvatar) {
+    if (!oldAvatar || !newAvatar) {
+        return;
+    }
+
+    // Store the rename mapping for delayed processing
+    const renameData = { oldAvatar, newAvatar, timestamp: Date.now() };
+
+    // Defer the actual update to allow SillyTavern to rebuild character data
+    setTimeout(async () => {
+        await processCharacterRenameUpdate(renameData);
+    }, 500); // Give SillyTavern time to rebuild character data
+}
+
+/**
+ * Process the character rename update after SillyTavern has rebuilt character data.
+ * This function remaps ALL character references based on current avatar mappings.
+ * @param {Object} renameData - Contains oldAvatar, newAvatar, and timestamp.
+ */
+async function processCharacterRenameUpdate(renameData) {
+    const { oldAvatar, newAvatar } = renameData;
+
+    const context = SillyTavern.getContext();
+    const characters = context.characters;
+
+    if (!characters) {
+        return;
+    }
+
+    // Build a map of avatars to their current character IDs
+    const avatarToCharacterId = {};
+    for (const [charId, char] of Object.entries(characters)) {
+        if (char.avatar) {
+            avatarToCharacterId[char.avatar] = charId;
+        }
+    }
+
+    // Build a comprehensive mapping of chat files to their correct character IDs
+    // by actually checking which character has which chat files
+    const chatFileToCharacterId = {};
+
+    try {
+        // Get all chat files for all characters to build accurate mapping
+        for (const [charId, char] of Object.entries(characters)) {
+            if (char.avatar) {
+                try {
+                    const chats = await getListOfCharacterChats(char.avatar);
+                    if (Array.isArray(chats)) {
+                        for (const chatName of chats) {
+                            if (typeof chatName === 'string' && chatName) {
+                                chatFileToCharacterId[chatName] = charId;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Continue with other characters if one fails
+                }
+            }
+        }
+    } catch (e) {
+        // Continue with what we have
+    }
+
+    let updatesMade = false;
+
+    // Update pinned chats - remap all character IDs based on actual chat ownership
+    let pinned = getPinnedChats();
+    let pinnedChanged = false;
+
+    pinned = pinned.map(p => {
+        // Try to find the correct character ID for this chat file
+        const correctCharacterId = chatFileToCharacterId[p.file_name];
+
+        if (correctCharacterId && correctCharacterId !== p.characterId) {
+            pinnedChanged = true;
+            updatesMade = true;
+            return { ...p, characterId: correctCharacterId };
+        } else if (!correctCharacterId) {
+            // Chat file not found in any character, check if character ID is still valid
+            const currentChar = characters[p.characterId];
+            if (!currentChar) {
+                // Keep the entry but it might be orphaned
+            }
+        }
+
+        return p;
+    });
+
+    if (pinnedChanged) {
+        setPinnedChats(pinned);
+    }
+
+    // Update chat folders - remap all character IDs based on actual chat ownership
+    let map = getChatFoldersMap();
+    let foldersChanged = false;
+    const newMap = {};
+
+    for (const [key, folderIds] of Object.entries(map)) {
+        const [charId, fileName] = key.split(':', 2);
+
+        // Try to find the correct character ID for this chat file
+        const correctCharacterId = chatFileToCharacterId[fileName];
+
+        if (correctCharacterId) {
+            // We found the correct character for this chat file
+            const correctKey = correctCharacterId + ':' + fileName;
+
+            if (correctKey !== key) {
+                foldersChanged = true;
+                updatesMade = true;
+            }
+
+            newMap[correctKey] = folderIds;
+        } else {
+            // Chat file not found in any character, check if current character ID is still valid
+            const currentChar = characters[charId];
+            if (currentChar) {
+                // Character still exists, keep the mapping
+                newMap[key] = folderIds;
+            } else {
+                // Skip this entry as it's orphaned
+            }
+        }
+    }
+
+    if (foldersChanged) {
+        setChatFoldersMap(newMap);
+    }
+
+    if (updatesMade) {
+        // Refresh UI
+        if (typeof refreshFoldersTab === 'function') {
+            setTimeout(() => {
+                refreshFoldersTab();
+            }, 100);
+        }
+
+        if (typeof populateAllChatsTab === 'function') {
+            setTimeout(() => {
+                populateAllChatsTab();
+            }, 100);
+        }
     }
 }
