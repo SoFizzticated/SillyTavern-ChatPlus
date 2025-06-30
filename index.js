@@ -29,6 +29,7 @@ const MAX_RECENT_CHATS = 100;
 let activateTab = null;
 let refreshFoldersTab = null; // will be defined after function definitions
 let recentChatsTabContainer = null;
+let isRefreshingFoldersTab = false; // Flag to prevent concurrent refreshes
 
 /**
  * Get the extension settings object, initializing if necessary.
@@ -1365,6 +1366,7 @@ function addTabToCharManagementMenu() {
     selectedChatWrapper.style.margin = '8px 0 8px 0';
     // Add a header/title
     const selectedChatHeader = document.createElement('div');
+    selectedChatHeader.id = 'chatsplus-selected-chat-header';
     selectedChatHeader.textContent = t ? t`Currently Selected Chat` : 'Currently Selected Chat';
     selectedChatHeader.style.fontWeight = 'bold';
     selectedChatHeader.style.fontSize = '1.08em';
@@ -1392,7 +1394,11 @@ function addTabToCharManagementMenu() {
                 characterId: charId
             };
         }
-        if (!chat || !chat.file_name) return;
+        if (!chat || !chat.file_name) {
+            selectedChatWrapper.style.display = 'none';
+            return;
+        }
+        selectedChatWrapper.style.display = '';
         // Use the same rendering as .tabItem .tabItem-root
         const tabItem = document.createElement('div');
         tabItem.classList.add('tabItem', 'tabItem-root', 'tabItem-singleline');
@@ -1498,7 +1504,10 @@ function addTabToCharManagementMenu() {
         } else if (tabIdx === 2) {
             foldersTabButton.classList.add('active');
             foldersTab.style.display = '';
-            if (!foldersTab.querySelector('.folders-tab-container')) refreshFoldersTab();
+            const existingContainer = foldersTab.querySelector('.folders-tab-container');
+            if (!existingContainer) {
+                refreshFoldersTab(); // Note: not awaited to avoid blocking UI
+            }
         }
     };
     charactersTabButton.addEventListener('click', () => activateTab(0));
@@ -1509,168 +1518,210 @@ function addTabToCharManagementMenu() {
 }
 
 // =========================
-// 7.1. Folders Tab Refresh Function
+// 7.1. Folders Tab Helper Functions
 // =========================
+
+/**
+ * Build folderedChats map from chatFolders data and all available chats.
+ * This function properly transforms the raw chatFolders data into the format
+ * expected by renderAllChatsFoldersUI.
+ * @param {Array} allChats - Array of all chat objects.
+ * @returns {Object} Map of folderId to array of chats.
+ */
+function buildFolderedChatsMap(allChats) {
+    const folderedChats = {};
+    const chatFoldersMap = getChatFoldersMap();
+
+    // Initialize empty arrays for all folders
+    const folders = getFolders();
+    folders.forEach(folder => {
+        folderedChats[folder.id] = [];
+    });
+
+    // Process each chat and assign to folders
+    allChats.forEach(chat => {
+        const chatKey = chat.characterId + ':' + chat.file_name;
+        const folderIds = chatFoldersMap[chatKey] || [];
+
+        folderIds.forEach(folderId => {
+            if (folderedChats[folderId]) {
+                folderedChats[folderId].push(chat);
+            }
+        });
+    });
+
+    return folderedChats;
+}
+
+// =========================
+// 7.2. Folders Tab Refresh Function
 refreshFoldersTab = async function () {
-    const foldersTab = document.getElementById('chatsplus-folders-tab');
-    if (!foldersTab) return;
-    foldersTab.innerHTML = '';
-    const foldersTabContainer = document.createElement('div');
-    foldersTabContainer.className = 'folders-tab-container';
-    const addFolderRow = document.createElement('div');
-    addFolderRow.className = 'add-folder-row';
-    const addFolderBtn = document.createElement('button');
-    addFolderBtn.className = 'add-folder-btn';
-    addFolderBtn.title = 'Add Folder';
-    addFolderBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
-    addFolderBtn.addEventListener('click', async () => {
-        // Show a popup with a list of all folders as radio inputs and allow selecting one (or none)
-        // Recursively render radio buttons for folders
-        function renderFolderRadios(nodes, radioName, container, level = 0) {
-            nodes.forEach(folder => {
-                const label = document.createElement('label');
-                label.style.display = 'flex';
-                label.style.alignItems = 'center';
-                label.style.marginLeft = (level * 20) + 'px';
-                const radio = document.createElement('input');
-                radio.type = 'radio';
-                radio.name = radioName;
-                radio.value = folder.id;
-                label.appendChild(radio);
-                label.appendChild(document.createTextNode(' 📁 ' + folder.name));
-                container.appendChild(label);
-                if (folder.children && folder.children.length > 0) {
-                    renderFolderRadios(folder.children, radioName, container, level + 1);
+    if (isRefreshingFoldersTab) {
+        return;
+    }
+    isRefreshingFoldersTab = true;
+
+    try {
+        const foldersTab = document.getElementById('chatsplus-folders-tab');
+        if (!foldersTab) {
+            return;
+        }
+
+        // Check for existing containers before clearing
+        const existingContainers = foldersTab.querySelectorAll('.folders-tab-container');
+
+        foldersTab.innerHTML = '';
+        const foldersTabContainer = document.createElement('div');
+        foldersTabContainer.className = 'folders-tab-container';
+        const addFolderRow = document.createElement('div');
+        addFolderRow.className = 'add-folder-row';
+        const addFolderBtn = document.createElement('button');
+        addFolderBtn.className = 'add-folder-btn';
+        addFolderBtn.title = 'Add Folder';
+        addFolderBtn.innerHTML = '<i class="fa-solid fa-plus"></i>';
+        addFolderBtn.addEventListener('click', async () => {
+            // Show a popup with a list of all folders as radio inputs and allow selecting one (or none)
+            // Recursively render radio buttons for folders
+            function renderFolderRadios(nodes, radioName, container, level = 0) {
+                nodes.forEach(folder => {
+                    const label = document.createElement('label');
+                    label.style.display = 'flex';
+                    label.style.alignItems = 'center';
+                    label.style.marginLeft = (level * 20) + 'px';
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.name = radioName;
+                    radio.value = folder.id;
+                    label.appendChild(radio);
+                    label.appendChild(document.createTextNode(' 📁 ' + folder.name));
+                    container.appendChild(label);
+                    if (folder.children && folder.children.length > 0) {
+                        renderFolderRadios(folder.children, radioName, container, level + 1);
+                    }
+                });
+            }
+            const folders = getFolders().slice().sort((a, b) => a.name.localeCompare(b.name));
+            const content = document.createElement('div');
+            content.innerHTML = `<h3>${t`Select a parent folder (optional):`}</h3>`;
+            const radioGroup = document.createElement('div');
+            radioGroup.className = 'chatplus_radio_group';
+            const radioName = 'parent-folder-radio';
+            // Option for no parent
+            const noneLabel = document.createElement('label');
+            noneLabel.style.display = 'flex';
+            noneLabel.style.alignItems = 'center';
+            const noneRadio = document.createElement('input');
+            noneRadio.type = 'radio';
+            noneRadio.name = radioName;
+            noneRadio.value = '';
+            noneRadio.checked = true;
+            noneLabel.appendChild(noneRadio);
+            noneLabel.appendChild(document.createTextNode(' ' + t`No parent`));
+            radioGroup.appendChild(noneLabel);
+            // Render folder radios as tree
+            const folderTree = buildFolderTree(folders);
+            renderFolderRadios(folderTree, radioName, radioGroup, 0);
+            content.appendChild(radioGroup);
+            content.innerHTML += `<hr style='margin:10px 0;'>`;
+            const nameLabel = document.createElement('label');
+            nameLabel.textContent = t`Enter folder name:`;
+            nameLabel.className = 'chatplus_menu_label';
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'chatplus_menu_input';
+            content.appendChild(nameLabel);
+            content.appendChild(nameInput);
+
+            const popup = new Popup(
+                content,
+                POPUP_TYPE.TEXT,
+                '',
+                {
+                    okButton: t`Add`,
+                    cancelButton: t`Cancel`,
+                    wide: true,
+                    large: true,
+                }
+            );
+            // Trigger the popup's OK button on Enter key
+            nameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    popup.okButton.click();
+                }
+            });        // Wait for popup result
+            const popupResult = await popup.show();
+            if (popupResult === POPUP_RESULT.CANCELLED) return null; // User cancelled the popup
+            // Read the selected radio after popup closes
+            const selectedRadio = content.querySelector('input[type="radio"]:checked');
+            const selectedFolderId = selectedRadio && selectedRadio.value ? selectedRadio.value : null;
+            const name = nameInput.value;
+            if (name && name.trim()) {
+                addFolder(name.trim(), selectedFolderId);
+                await refreshFoldersTab();
+            }
+        });
+        const addFolderLabel = document.createElement('span');
+        addFolderLabel.className = 'add-folder-label';
+        addFolderLabel.textContent = 'Add Folder';
+        addFolderLabel.addEventListener('click', () => addFolderBtn.click());
+        addFolderRow.appendChild(addFolderBtn);
+        addFolderRow.appendChild(addFolderLabel);
+        foldersTabContainer.appendChild(addFolderRow);
+        let allChats = [];
+        if (SillyTavern.getContext().characters) {
+            const characters = SillyTavern.getContext().characters;
+            // Parallelize fetching chat lists for all characters
+            const chatListPromises = Object.entries(characters).map(async ([charId, char]) => {
+                try {
+                    const chats = await getListOfCharacterChats(char.avatar);
+                    return chats.filter(chatName => typeof chatName === 'string' && chatName).map(chatName => ({
+                        character: char.name || charId,
+                        avatar: char.avatar,
+                        file_name: chatName,
+                        characterId: charId
+                    }));
+                } catch (e) {
+                    return [];
                 }
             });
+            const chatLists = await Promise.all(chatListPromises);
+            allChats = allChats.concat(chatLists.flat());
         }
-        const folders = getFolders().slice().sort((a, b) => a.name.localeCompare(b.name));
-        const content = document.createElement('div');
-        content.innerHTML = `<h3>${t`Select a parent folder (optional):`}</h3>`;
-        const radioGroup = document.createElement('div');
-        radioGroup.className = 'chatplus_radio_group';
-        const radioName = 'parent-folder-radio';
-        // Option for no parent
-        const noneLabel = document.createElement('label');
-        noneLabel.style.display = 'flex';
-        noneLabel.style.alignItems = 'center';
-        const noneRadio = document.createElement('input');
-        noneRadio.type = 'radio';
-        noneRadio.name = radioName;
-        noneRadio.value = '';
-        noneRadio.checked = true;
-        noneLabel.appendChild(noneRadio);
-        noneLabel.appendChild(document.createTextNode(' ' + t`No parent`));
-        radioGroup.appendChild(noneLabel);
-        // Render folder radios as tree
-        const folderTree = buildFolderTree(folders);
-        renderFolderRadios(folderTree, radioName, radioGroup, 0);
-        content.appendChild(radioGroup);
-        content.innerHTML += `<hr style='margin:10px 0;'>`;
-        const nameLabel = document.createElement('label');
-        nameLabel.textContent = t`Enter folder name:`;
-        nameLabel.className = 'chatplus_menu_label';
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.className = 'chatplus_menu_input';
-        content.appendChild(nameLabel);
-        content.appendChild(nameInput);
-
-        const popup = new Popup(
-            content,
-            POPUP_TYPE.TEXT,
-            '',
-            {
-                okButton: t`Add`,
-                cancelButton: t`Cancel`,
-                wide: true,
-                large: true,
-            }
-        );
-        // Trigger the popup's OK button on Enter key
-        nameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                popup.okButton.click();
-            }
-        });
-
-        // Wait for popup result
-        const popupResult = await popup.show();
-        console.log(`Popup result: ${popupResult}`);
-        if (popupResult === POPUP_RESULT.CANCELLED) return null; // User cancelled the popup
-        // Read the selected radio after popup closes
-        const selectedRadio = content.querySelector('input[type="radio"]:checked');
-        const selectedFolderId = selectedRadio && selectedRadio.value ? selectedRadio.value : null;
-        const name = nameInput.value;
-        if (name && name.trim()) {
-            addFolder(name.trim(), selectedFolderId);
-            await refreshFoldersTab();
-        }
-    });
-    const addFolderLabel = document.createElement('span');
-    addFolderLabel.className = 'add-folder-label';
-    addFolderLabel.textContent = 'Add Folder';
-    addFolderLabel.addEventListener('click', () => addFolderBtn.click());
-    addFolderRow.appendChild(addFolderBtn);
-    addFolderRow.appendChild(addFolderLabel);
-    foldersTabContainer.appendChild(addFolderRow);
-    let allChats = [];
-    if (SillyTavern.getContext().characters) {
-        const characters = SillyTavern.getContext().characters;
-        // Parallelize fetching chat lists for all characters
-        const chatListPromises = Object.entries(characters).map(async ([charId, char]) => {
+        let chatStatsMap = {};
+        // Parallelize fetching stats for all characters
+        const uniqueCharacterIds = [...new Set(allChats.map(chat => chat.characterId))];
+        const statsPromises = uniqueCharacterIds.map(async (charId) => {
             try {
-                const chats = await getListOfCharacterChats(char.avatar);
-                return chats.filter(chatName => typeof chatName === 'string' && chatName).map(chatName => ({
-                    character: char.name || charId,
-                    avatar: char.avatar,
-                    file_name: chatName,
-                    characterId: charId
-                }));
+                const statsList = await getPastCharacterChats(charId);
+                return statsList.map(stat => {
+                    const fileName = String(stat.file_name).replace('.jsonl', '');
+                    return [charId + ':' + fileName, stat];
+                });
             } catch (e) { return []; }
         });
-        const chatLists = await Promise.all(chatListPromises);
-        allChats = chatLists.flat();
-    }
-    let chatStatsMap = {};
-    // Parallelize fetching stats for all characters
-    const uniqueCharacterIds = [...new Set(allChats.map(chat => chat.characterId))];
-    const statsPromises = uniqueCharacterIds.map(async (charId) => {
-        try {
-            const statsList = await getPastCharacterChats(charId);
-            return statsList.map(stat => {
-                const fileName = String(stat.file_name).replace('.jsonl', '');
-                return [charId + ':' + fileName, stat];
-            });
-        } catch (e) { return []; }
-    });
-    const statsEntries = (await Promise.all(statsPromises)).flat();
-    chatStatsMap = Object.fromEntries(statsEntries);
-    allChats = allChats.map(chat => {
-        const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
-        let lastMesRaw = stat && stat.last_mes ? stat.last_mes : null;
-        let lastMesDate = null;
-        if (lastMesRaw) {
-            // Use timestampToMoment (dayjs wrapper) for robust parsing
-            const momentObj = timestampToMoment(lastMesRaw);
-            if (momentObj && momentObj.isValid()) {
-                lastMesDate = momentObj.toDate();
+        const statsEntries = (await Promise.all(statsPromises)).flat();
+        chatStatsMap = Object.fromEntries(statsEntries);
+        allChats = allChats.map(chat => {
+            const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
+            let lastMesRaw = stat && stat.last_mes ? stat.last_mes : null;
+            let lastMesDate = null;
+            if (lastMesRaw) {
+                // Use timestampToMoment (dayjs wrapper) for robust parsing
+                const momentObj = timestampToMoment(lastMesRaw);
+                if (momentObj && momentObj.isValid()) {
+                    lastMesDate = momentObj.toDate();
+                }
             }
-        }
-        return { ...chat, stat, last_mes: lastMesDate };
-    }).filter(chat => chat.last_mes);
-    const folderedChats = {};
-    const folders = getFolders();
-    for (const folder of folders) folderedChats[folder.id] = [];
-    for (const chat of allChats) {
-        const folderIds = getChatFolderIds(chat);
-        for (const folderId of folderIds) {
-            if (folderedChats[folderId]) folderedChats[folderId].push(chat);
-        }
+            return { ...chat, stat, last_mes: lastMesDate };
+        });
+        // Build the folderedChats map using the new helper function
+        const folderedChats = buildFolderedChatsMap(allChats);
+        renderAllChatsFoldersUI(foldersTabContainer, folderedChats);
+        foldersTab.appendChild(foldersTabContainer);
+    } finally {
+        isRefreshingFoldersTab = false;
     }
-    renderAllChatsFoldersUI(foldersTabContainer, folderedChats);
-    foldersTab.appendChild(foldersTabContainer);
 };
 
 // =========================
@@ -1708,7 +1759,6 @@ refreshFoldersTab = async function () {
             }, 1000); // Delay to ensure everything is loaded
         } else if (defaultTab === 'folders') {
             setTimeout(() => {
-                refreshFoldersTab();
                 activateTab(2);
             }, 1000); // Delay to ensure everything is loaded
         }
