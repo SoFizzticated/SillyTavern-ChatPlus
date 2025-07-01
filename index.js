@@ -2632,9 +2632,29 @@ refreshFoldersTab = async function () {
         });
     }
 
-    // Listen for character rename events
-    if (eventSource && event_types && event_types.CHARACTER_RENAMED) {
-        eventSource.on(event_types.CHARACTER_RENAMED, handleCharacterRename);
+    // Listen for character management events that can shift character IDs
+    if (eventSource && event_types) {
+        if (event_types.CHARACTER_RENAMED) {
+            eventSource.on(event_types.CHARACTER_RENAMED, handleCharacterRename);
+        }
+
+        if (event_types.CHARACTER_DELETED) {
+            eventSource.on(event_types.CHARACTER_DELETED, handleCharacterDelete);
+        }
+
+        if (event_types.CHARACTER_DUPLICATED) {
+            eventSource.on(event_types.CHARACTER_DUPLICATED, handleCharacterDuplicated);
+        }
+
+        // Settings events that rebuild character data
+        if (event_types.SETTINGS_LOADED_AFTER) {
+            eventSource.on(event_types.SETTINGS_LOADED_AFTER, handleSettingsReloaded);
+        }
+
+        // Character page events that might reload character data
+        if (event_types.CHARACTER_PAGE_LOADED) {
+            eventSource.on(event_types.CHARACTER_PAGE_LOADED, handleCharacterPageLoaded);
+        }
     }
 
     // Disable all existing backup attachments on initialization
@@ -2678,27 +2698,6 @@ function handleChatRename(chat, newName) {
         delete map[oldKey];
         setChatFoldersMap(map);
     }
-}
-
-/**
- * Update all internal references when a character is renamed.
- * Since character IDs get reassigned during rename, we need to use avatar paths
- * as the stable identifier and defer the update to when character data is refreshed.
- * @param {string} oldAvatar - The old character avatar/identifier.
- * @param {string} newAvatar - The new character avatar/identifier.
- */
-function handleCharacterRename(oldAvatar, newAvatar) {
-    if (!oldAvatar || !newAvatar) {
-        return;
-    }
-
-    // Store the rename mapping for delayed processing
-    const renameData = { oldAvatar, newAvatar, timestamp: Date.now() };
-
-    // Defer the actual update to allow SillyTavern to rebuild character data
-    setTimeout(async () => {
-        await processCharacterRenameUpdate(renameData);
-    }, 500); // Give SillyTavern time to rebuild character data
 }
 
 /**
@@ -2830,4 +2829,112 @@ async function processCharacterRenameUpdate(renameData) {
             }, 100);
         }
     }
+}
+
+/**
+ * Update all internal references when a character is renamed.
+ * Since character IDs get reassigned during rename, we need to use avatar paths
+ * as the stable identifier and defer the update to when character data is refreshed.
+ * @param {string} oldAvatar - The old character avatar/identifier.
+ * @param {string} newAvatar - The new character avatar/identifier.
+ */
+function handleCharacterRename(oldAvatar, newAvatar) {
+    if (!oldAvatar || !newAvatar) {
+        return;
+    }
+
+    // Store the rename mapping for delayed processing
+    const renameData = { oldAvatar, newAvatar, timestamp: Date.now() };
+
+    // Defer the actual update to allow SillyTavern to rebuild character data
+    setTimeout(async () => {
+        await processCharacterRenameUpdate(renameData);
+    }, 500); // Give SillyTavern time to rebuild character data
+}
+
+
+/**
+ * Handle character deletion - remove orphaned references.
+ * @param {string} characterId - The ID of the deleted character.
+ */
+function handleCharacterDelete(characterId) {
+    if (!characterId) return;
+
+    setTimeout(async () => {
+        let updatesMade = false;
+
+        // Remove from pinned chats
+        let pinned = getPinnedChats();
+        const originalPinnedLength = pinned.length;
+        pinned = pinned.filter(p => p.characterId !== characterId);
+        if (pinned.length !== originalPinnedLength) {
+            setPinnedChats(pinned);
+            updatesMade = true;
+        }
+
+        // Remove from chat folders
+        let map = getChatFoldersMap();
+        const newMap = {};
+        for (const [key, folderIds] of Object.entries(map)) {
+            const [charId] = key.split(':', 1);
+            if (charId !== characterId) {
+                newMap[key] = folderIds;
+            } else {
+                updatesMade = true;
+            }
+        }
+        setChatFoldersMap(newMap);
+
+        if (updatesMade) {
+            // Refresh UI
+            if (typeof refreshFoldersTab === 'function') {
+                setTimeout(() => refreshFoldersTab(), 100);
+            }
+            if (typeof populateAllChatsTab === 'function') {
+                setTimeout(() => populateAllChatsTab(), 100);
+            }
+        }
+    }, 100);
+}
+
+/**
+ * Handle character duplication - character IDs may shift.
+ */
+function handleCharacterDuplicated() {
+    // Defer the remapping to allow SillyTavern to rebuild character data
+    setTimeout(async () => {
+        await processCharacterRenameUpdate({
+            oldAvatar: '',
+            newAvatar: '',
+            timestamp: Date.now()
+        });
+    }, 500);
+}
+
+/**
+ * Handle settings reload - character IDs may be reassigned.
+ */
+function handleSettingsReloaded() {
+    // Defer the remapping to allow SillyTavern to rebuild character data
+    setTimeout(async () => {
+        await processCharacterRenameUpdate({
+            oldAvatar: '',
+            newAvatar: '',
+            timestamp: Date.now()
+        });
+    }, 1000); // Longer delay for settings reload
+}
+
+/**
+ * Handle character page loaded - might indicate character data changes.
+ */
+function handleCharacterPageLoaded() {
+    // Defer the remapping with a short delay
+    setTimeout(async () => {
+        await processCharacterRenameUpdate({
+            oldAvatar: '',
+            newAvatar: '',
+            timestamp: Date.now()
+        });
+    }, 200);
 }
