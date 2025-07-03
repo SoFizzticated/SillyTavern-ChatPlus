@@ -1972,6 +1972,46 @@ function renderExtensionSettings() {
     });
     defaultTabSection.appendChild(tabRow);
     inlineDrawerContent.appendChild(defaultTabSection);
+
+    // =========================
+    // Auto-Scroll to Bottom Option
+    // =========================
+    const autoScrollCheckboxLabel = document.createElement('label');
+    autoScrollCheckboxLabel.classList.add('checkbox_label');
+    autoScrollCheckboxLabel.htmlFor = `${settingsKey}-autoScrollToBottom`;
+    autoScrollCheckboxLabel.style.margin = '16px 0 8px 0';
+    autoScrollCheckboxLabel.style.display = 'block';
+
+    const autoScrollCheckbox = document.createElement('input');
+    autoScrollCheckbox.id = `${settingsKey}-autoScrollToBottom`;
+    autoScrollCheckbox.type = 'checkbox';
+    autoScrollCheckbox.checked = settings.autoScrollToBottom ?? false;
+    autoScrollCheckbox.addEventListener('change', () => {
+        settings.autoScrollToBottom = autoScrollCheckbox.checked;
+        context.saveSettingsDebounced();
+    });
+
+    const autoScrollCheckboxText = document.createElement('span');
+    autoScrollCheckboxText.textContent = t`Auto-scroll chat to bottom on load`;
+    autoScrollCheckboxLabel.append(autoScrollCheckbox, autoScrollCheckboxText);
+    inlineDrawerContent.appendChild(autoScrollCheckboxLabel);
+
+    // Manual scroll to bottom button
+    const scrollToBottomBtn = document.createElement('button');
+    scrollToBottomBtn.textContent = t`Scroll to Bottom Now`;
+    scrollToBottomBtn.className = 'settings-action-btn';
+    scrollToBottomBtn.style.background = '#17a';
+    scrollToBottomBtn.style.color = '#fff';
+    scrollToBottomBtn.style.border = 'none';
+    scrollToBottomBtn.style.margin = '8px 0 16px 0';
+    scrollToBottomBtn.onclick = () => {
+        const chatElement = document.getElementById('chat');
+        if (chatElement) {
+            chatElement.scrollTop = chatElement.scrollHeight;
+        }
+    };
+    inlineDrawerContent.appendChild(scrollToBottomBtn);
+
     // =========================
     // Data Management Buttons (Import, Export, Wipe)
     // =========================
@@ -2604,6 +2644,16 @@ refreshFoldersTab = async function () {
 
     // Initialize backup system
     initializeBackupSystem();
+
+    // Auto-scroll to bottom functionality
+    if (settings.autoScrollToBottom !== false) {
+        setTimeout(() => {
+            const chatElement = document.getElementById('chat');
+            if (chatElement) {
+                chatElement.scrollTop = chatElement.scrollHeight;
+            }
+        }, 1000); // Delay to ensure chat is loaded
+    }
 
     // Activate the default tab on startup
     const defaultTab = settings.defaultTab ?? 'characters';
