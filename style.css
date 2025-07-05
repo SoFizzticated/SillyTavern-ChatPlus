@@ -287,6 +287,13 @@
     align-items: center;
     margin: 8px 4px 12px 4px;
 }
+.filter-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
 .filter-input {
     width: 100%;
     padding: 6px 10px;
@@ -296,6 +303,29 @@
     background: #222;
     color: #fff;
     margin-right: 8px;
+    padding-right: 30px; /* Make room for the clear button */
+}
+
+.filter-clear-button {
+    display: none;
+    position: absolute;
+    right: 15px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    color: #888;
+    font-size: 14px;
+    z-index: 10; /* Ensure it's on top */
+}
+
+.filter-clear-button:hover {
+    color: #fff;
+}
+
+.filter-clear-button:focus {
+    outline: none;
+    color: #fff;
 }
 
 .allChatsTabLoader {

@@ -2463,9 +2463,36 @@ function addTabToCharManagementMenu() {
             }
         });
 
+        // Pin button for pinning the "Currently Selected Chat" chat
+        const pinBtn = document.createElement('button');
+        pinBtn.className = 'pinBtn tabItem-pinBtn';
+        pinBtn.title = (t ? t`Pin or folder chat` : 'Pin or folder chat');
+        pinBtn.innerHTML = '<i class="fa-regular fa-bookmark"></i>';
+        pinBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            // Show pin/folder selection popup
+            const selectedFolderId = await promptSelectFolderOrPinned(chat);
+            if (selectedFolderId === 'pinned') {
+                togglePinChat(chat);
+                // Refresh UI after pinning
+                if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
+                if (typeof refreshFoldersTab === 'function') await refreshFoldersTab();
+                renderSelectedChat(); // Refresh the selected chat display
+            } else if (selectedFolderId) {
+                const folderIds = getChatFolderIds(chat);
+                if (!folderIds.includes(selectedFolderId)) {
+                    assignChatToFolder(chat, selectedFolderId);
+                    // Refresh UI after assigning to folder
+                    if (typeof populateAllChatsTab === 'function') await populateAllChatsTab();
+                    if (typeof refreshFoldersTab === 'function') await refreshFoldersTab();
+                }
+            }
+        });
+
         tabItem.appendChild(previewImg);
         tabItem.appendChild(nameRow);
         tabItem.appendChild(pencilIcon);
+        tabItem.appendChild(pinBtn);
         selectedChatContainer.appendChild(tabItem);
     }
     // Initial render
