@@ -6,7 +6,7 @@ SillyTavern is a wonderful tool but very Character-centric, making managing conv
 
 ### Main Interface & Organization
 
-| Main Interface                                 | Recent Chats & Organization                  |
+| Recent and Pinned Chats                        | Folder Organization                          |
 | ---------------------------------------------- | -------------------------------------------- |
 | ![ChatsPlus Interface](./.readme/Preview2.png) | ![Recent Chats View](./.readme/Preview3.png) |
 
@@ -41,6 +41,11 @@ Your order, your way.
 
 Use this URL with the extension installer: `https://github.com/SoFizzticated/SillyTavern-ChatPlus`
 ![Installation Instructions](./.readme/Installation.png)
+
+## Known Issues
+
+- **Renaming a chat**: Renaming a chat from OUTSIDE the ChatsPlus interface may break the internal organization structure! This is due to a limitation on the events SillyTavern emits when renaming a chat. If you rename a chat, please do so from within the ChatsPlus interface to ensure the folder structure remains intact or export your extension data from the "Settings" menu to edit and fix it manually.
+- **Yes, it is stitched together**: The extension is stitched together which means sometimes things break. In those cases, please reload the page and it should fix itself. If not, please report the issue on the extension thread in the SillyTavern Discord server.
 
 ## Author
 
