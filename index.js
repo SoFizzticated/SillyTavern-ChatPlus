@@ -247,17 +247,23 @@ function setBackupVersions(versions) {
 /**
  * Create a backup of the current extension settings.
  * Keeps track of the last few login sessions and rotates them out.
+ * @param {boolean} forceCreate - If true, will create a new backup even if one exists for today.
  * @returns {Promise<boolean>} True if backup was successful, false otherwise.
  */
-async function createBackup() {
+async function createBackup(forceCreate = false) {
     try {
         const currentDate = getDateString();
         let versions = getBackupVersions();
 
         // Check if we already have a backup for today
         const todayBackup = versions.find(v => v.date === currentDate);
-        if (todayBackup) {
-            // Update today's backup by deleting the old one first
+        if (todayBackup && !forceCreate) {
+            // We already have a backup for today, no need to create another one
+            return true;
+        }
+
+        if (todayBackup && forceCreate) {
+            // Force creation - delete the old one first
             try {
                 const attachment = {
                     url: todayBackup.url,
@@ -416,7 +422,6 @@ async function initializeBackupSystem() {
 
         // Check if we already have a backup for today
         const todayBackup = versions.find(v => v.date === currentDate);
-
         if (!todayBackup) {
             // Create a backup for this login session
             await createBackup();
@@ -2104,7 +2109,7 @@ function renderExtensionSettings() {
     backupDescription.style.margin = '4px 0 8px 0';
     backupDescription.style.fontSize = '0.9em';
     backupDescription.style.color = '#888';
-    backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created the first time you log in on each new day, for up to ${MAX_BACKUP_SESSIONS} different days. Backups are stored server-side and older backups are rotated out automatically.`;
+    backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created once per day on the first login of each day, for up to ${getMaxBackupSessions()} different days. Backups are stored server-side and older backups are rotated out automatically.`;
     backupSection.appendChild(backupDescription);
 
     // Auto-backup toggle
@@ -2144,7 +2149,7 @@ function renderExtensionSettings() {
         createBackupBtn.disabled = true;
         createBackupBtn.textContent = t`Creating...`;
         try {
-            const success = await createBackup();
+            const success = await createBackup(true); // Force create a new backup
             if (success) {
                 alert(t`Backup created successfully!`);
             } else {
