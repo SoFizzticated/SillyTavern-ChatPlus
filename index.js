@@ -2094,36 +2094,53 @@ function renderExtensionSettings() {
         context.saveSettingsDebounced();
     });
 
-    const autoScrollCheckboxText = document.createElement('span');
-    autoScrollCheckboxText.textContent = t`Auto-scroll chat to bottom on load`;
-    autoScrollCheckboxLabel.append(autoScrollCheckbox, autoScrollCheckboxText);
-    inlineDrawerContent.appendChild(autoScrollCheckboxLabel);
+    const autoBackupCheckboxText = document.createElement('span');
+    autoBackupCheckboxText.textContent = t`Enable automatic backups on login`;
+    autoBackupCheckboxLabel.append(autoBackupCheckbox, autoBackupCheckboxText);
+    backupSection.appendChild(autoBackupCheckboxLabel);
 
-    // Manual scroll to bottom button
-    const scrollToBottomBtn = document.createElement('button');
-    scrollToBottomBtn.textContent = t`Scroll to Bottom Now`;
-    scrollToBottomBtn.className = 'settings-action-btn';
-    scrollToBottomBtn.style.background = '#17a';
-    scrollToBottomBtn.style.color = '#fff';
-    scrollToBottomBtn.style.border = 'none';
-    scrollToBottomBtn.style.margin = '8px 0 16px 0';
-    scrollToBottomBtn.onclick = () => {
-        const chatElement = document.getElementById('chat');
-        if (chatElement) {
-            chatElement.scrollTop = chatElement.scrollHeight;
+    // Max backup sessions input
+    const maxBackupSessionsContainer = document.createElement('div');
+    maxBackupSessionsContainer.style.margin = '8px 0';
+    maxBackupSessionsContainer.style.display = 'flex';
+    maxBackupSessionsContainer.style.alignItems = 'center';
+    maxBackupSessionsContainer.style.gap = '8px';
+
+    const maxBackupSessionsLabel = document.createElement('label');
+    maxBackupSessionsLabel.textContent = t`Maximum backup sessions:`;
+    maxBackupSessionsLabel.style.minWidth = '200px';
+
+    const maxBackupSessionsInput = document.createElement('input');
+    maxBackupSessionsInput.type = 'number';
+    maxBackupSessionsInput.min = '1';
+    maxBackupSessionsInput.max = '20';
+    maxBackupSessionsInput.value = settings.maxBackupSessions ?? defaultSettings.maxBackupSessions;
+    maxBackupSessionsInput.style.width = '80px';
+    maxBackupSessionsInput.className = 'chatplus_menu_input';
+    maxBackupSessionsInput.addEventListener('change', () => {
+        const value = parseInt(maxBackupSessionsInput.value);
+        if (value >= 1 && value <= 20) {
+            settings.maxBackupSessions = value;
+            context.saveSettingsDebounced();
+            // Update the description text
+            backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created once per day on the first login of each day, for up to ${value} different days. Backups are stored server-side and older backups are rotated out automatically.`;
         }
-    };
-    inlineDrawerContent.appendChild(scrollToBottomBtn);
+    });
 
-    // =========================
-    // Data Management Buttons (Import, Export, Wipe)
-    // =========================
+    const maxBackupSessionsHelp = document.createElement('span');
+    maxBackupSessionsHelp.style.fontSize = '0.9em';
+    maxBackupSessionsHelp.style.color = '#888';
+    maxBackupSessionsHelp.textContent = t`(1-20 days)`;
+
+    maxBackupSessionsContainer.appendChild(maxBackupSessionsLabel);
+    maxBackupSessionsContainer.appendChild(maxBackupSessionsInput);
+    maxBackupSessionsContainer.appendChild(maxBackupSessionsHelp);
+    backupSection.appendChild(maxBackupSessionsContainer);
+
     // Header for Import/Export section
-    const importExportHeader = document.createElement('div');
-    importExportHeader.style.margin = '16px 0 4px 0';
-    importExportHeader.style.fontWeight = 'bold';
+    const importExportHeader = document.createElement('span');
     importExportHeader.textContent = t`Import/Export current extension data:`;
-    inlineDrawerContent.appendChild(importExportHeader);
+    backupSection.appendChild(importExportHeader);
 
     // Export/Import Buttons row at Bottom
     const exportImportRow = document.createElement('div');
@@ -2194,80 +2211,7 @@ function renderExtensionSettings() {
     // Append buttons to the row and drawer content
     exportImportRow.appendChild(importBtn);
     exportImportRow.appendChild(exportBtn);
-    inlineDrawerContent.appendChild(exportImportRow);
-
-    // =========================
-    // Backup Management Section
-    // =========================
-    const backupSection = document.createElement('div');
-    backupSection.style.margin = '16px 0';
-    backupSection.innerHTML = `<b>${t`Backup Management:`}</b>`;
-
-    const backupDescription = document.createElement('p');
-    backupDescription.style.margin = '4px 0 8px 0';
-    backupDescription.style.fontSize = '0.9em';
-    backupDescription.style.color = '#888';
-    backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created once per day on the first login of each day, for up to ${getMaxBackupSessions()} different days. Backups are stored server-side and older backups are rotated out automatically.`;
-    backupSection.appendChild(backupDescription);
-
-    // Auto-backup toggle
-    const autoBackupCheckboxLabel = document.createElement('label');
-    autoBackupCheckboxLabel.classList.add('checkbox_label');
-    autoBackupCheckboxLabel.htmlFor = `${settingsKey}-autoBackup`;
-    autoBackupCheckboxLabel.style.margin = '8px 0';
-    autoBackupCheckboxLabel.style.display = 'block';
-
-    const autoBackupCheckbox = document.createElement('input');
-    autoBackupCheckbox.id = `${settingsKey}-autoBackup`;
-    autoBackupCheckbox.type = 'checkbox';
-    autoBackupCheckbox.checked = settings.autoBackup ?? true;
-    autoBackupCheckbox.addEventListener('change', () => {
-        settings.autoBackup = autoBackupCheckbox.checked;
-        context.saveSettingsDebounced();
-    });
-
-    const autoBackupCheckboxText = document.createElement('span');
-    autoBackupCheckboxText.textContent = t`Enable automatic backups on login`;
-    autoBackupCheckboxLabel.append(autoBackupCheckbox, autoBackupCheckboxText);
-    backupSection.appendChild(autoBackupCheckboxLabel);
-
-    // Max backup sessions input
-    const maxBackupSessionsContainer = document.createElement('div');
-    maxBackupSessionsContainer.style.margin = '8px 0';
-    maxBackupSessionsContainer.style.display = 'flex';
-    maxBackupSessionsContainer.style.alignItems = 'center';
-    maxBackupSessionsContainer.style.gap = '8px';
-
-    const maxBackupSessionsLabel = document.createElement('label');
-    maxBackupSessionsLabel.textContent = t`Maximum backup sessions:`;
-    maxBackupSessionsLabel.style.minWidth = '200px';
-
-    const maxBackupSessionsInput = document.createElement('input');
-    maxBackupSessionsInput.type = 'number';
-    maxBackupSessionsInput.min = '1';
-    maxBackupSessionsInput.max = '20';
-    maxBackupSessionsInput.value = settings.maxBackupSessions ?? defaultSettings.maxBackupSessions;
-    maxBackupSessionsInput.style.width = '80px';
-    maxBackupSessionsInput.className = 'chatplus_menu_input';
-    maxBackupSessionsInput.addEventListener('change', () => {
-        const value = parseInt(maxBackupSessionsInput.value);
-        if (value >= 1 && value <= 20) {
-            settings.maxBackupSessions = value;
-            context.saveSettingsDebounced();
-            // Update the description text
-            backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created once per day on the first login of each day, for up to ${value} different days. Backups are stored server-side and older backups are rotated out automatically.`;
-        }
-    });
-
-    const maxBackupSessionsHelp = document.createElement('span');
-    maxBackupSessionsHelp.style.fontSize = '0.9em';
-    maxBackupSessionsHelp.style.color = '#888';
-    maxBackupSessionsHelp.textContent = t`(1-20 days)`;
-
-    maxBackupSessionsContainer.appendChild(maxBackupSessionsLabel);
-    maxBackupSessionsContainer.appendChild(maxBackupSessionsInput);
-    maxBackupSessionsContainer.appendChild(maxBackupSessionsHelp);
-    backupSection.appendChild(maxBackupSessionsContainer);
+    backupSection.appendChild(exportImportRow);
 
     const backupButtonsRow = document.createElement('div');
     backupButtonsRow.style.display = 'flex';
