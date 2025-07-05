@@ -24,7 +24,7 @@ const MODULE_NAME = 'chatsPlus';
 const defaultSettings = {
     pinnedChats: [],
     autoBackup: true,
-    maxBackupSessions: 2
+    maxBackupSessions: 4
 };
 if (!('folders' in defaultSettings)) defaultSettings.folders = [];
 if (!('chatFolders' in defaultSettings)) defaultSettings.chatFolders = {};
