@@ -1262,11 +1262,29 @@ async function renderAllChatsInRecentChatsTab() {
     // Add filter input at the top 
     const filterRow = document.createElement('div');
     filterRow.className = 'filter-row';
+
+    // Create input wrapper for positioning the clear button
+    const inputWrapper = document.createElement('div');
+    inputWrapper.className = 'filter-input-wrapper';
+    inputWrapper.style.position = 'relative';
+    inputWrapper.style.display = 'flex';
+    inputWrapper.style.alignItems = 'center';
+
     const filterInput = document.createElement('input');
     filterInput.type = 'text';
     filterInput.placeholder = 'Filter chats...';
     filterInput.className = 'filter-input';
-    filterRow.appendChild(filterInput);
+    filterInput.style.paddingRight = '30px'; // Make room for the clear button
+
+    // Create clear button
+    const clearButton = document.createElement('button');
+    clearButton.className = 'filter-clear-button';
+    clearButton.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+    clearButton.title = 'Clear filter';
+
+    inputWrapper.appendChild(filterInput);
+    inputWrapper.appendChild(clearButton);
+    filterRow.appendChild(inputWrapper);
     container.appendChild(filterRow);
     // Loader and main container 
     const loader = document.createElement('div');
@@ -1314,6 +1332,23 @@ async function renderAllChatsInRecentChatsTab() {
         offset = 0;
         chatsTabContainer.innerHTML = '';
         doPopulate(e.target.value.trim());
+
+        // Show/hide clear button based on input content
+        if (e.target.value.trim().length > 0) {
+            clearButton.style.display = 'block';
+        } else {
+            clearButton.style.display = 'none';
+        }
+    });
+
+    // Clear button functionality
+    clearButton.addEventListener('click', () => {
+        filterInput.value = '';
+        clearButton.style.display = 'none';
+        offset = 0;
+        chatsTabContainer.innerHTML = '';
+        doPopulate('');
+        filterInput.focus(); // Keep focus on the input after clearing
     });
     loadMoreBtn.addEventListener('click', () => {
         offset += MAX_RECENT_CHATS;
