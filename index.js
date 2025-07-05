@@ -2000,12 +2000,62 @@ function renderExtensionSettings() {
     autoScrollCheckboxLabel.style.margin = '16px 0 8px 0';
     autoScrollCheckboxLabel.style.display = 'block';
 
-    const autoScrollCheckbox = document.createElement('input');
-    autoScrollCheckbox.id = `${settingsKey}-autoScrollToBottom`;
-    autoScrollCheckbox.type = 'checkbox';
-    autoScrollCheckbox.checked = settings.autoScrollToBottom ?? false;
-    autoScrollCheckbox.addEventListener('change', () => {
-        settings.autoScrollToBottom = autoScrollCheckbox.checked;
+    // const autoScrollCheckbox = document.createElement('input');
+    // autoScrollCheckbox.id = `${settingsKey}-autoScrollToBottom`;
+    // autoScrollCheckbox.type = 'checkbox';
+    // autoScrollCheckbox.checked = settings.autoScrollToBottom ?? false;
+    // autoScrollCheckbox.addEventListener('change', () => {
+    //     settings.autoScrollToBottom = autoScrollCheckbox.checked;
+    //     context.saveSettingsDebounced();
+    // });
+
+    // const autoScrollCheckboxText = document.createElement('span');
+    // autoScrollCheckboxText.textContent = t`Auto-scroll chat to bottom on load`;
+    // autoScrollCheckboxLabel.append(autoScrollCheckbox, autoScrollCheckboxText);
+    // inlineDrawerContent.appendChild(autoScrollCheckboxLabel);
+
+    // // Manual scroll to bottom button
+    // const scrollToBottomBtn = document.createElement('button');
+    // scrollToBottomBtn.textContent = t`Scroll to Bottom Now`;
+    // scrollToBottomBtn.className = 'settings-action-btn';
+    // scrollToBottomBtn.style.background = '#17a';
+    // scrollToBottomBtn.style.color = '#fff';
+    // scrollToBottomBtn.style.border = 'none';
+    // scrollToBottomBtn.style.margin = '8px 0 16px 0';
+    // scrollToBottomBtn.onclick = () => {
+    //     const chatElement = document.getElementById('chat');
+    //     if (chatElement) {
+    //         chatElement.scrollTop = chatElement.scrollHeight;
+    //     }
+    // };
+    // inlineDrawerContent.appendChild(scrollToBottomBtn);
+
+    // =========================
+    // Backup Management Section
+    // =========================
+    const backupSection = document.createElement('div');
+    backupSection.style.margin = '16px 0';
+    backupSection.innerHTML = `<b>${t`Backup Management:`}</b>`;
+
+    const backupDescription = document.createElement('p');
+    backupDescription.style.margin = '4px 0 8px 0';
+    backupDescription.style.fontSize = '0.9em';
+    backupDescription.style.color = '#888';
+    backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created once per day on the first login of each day, for up to ${getMaxBackupSessions()} different days. Backups are stored server-side and older backups are rotated out automatically.`;
+    backupSection.appendChild(backupDescription);
+
+    // Auto-backup toggle
+    const autoBackupCheckboxLabel = document.createElement('label');
+    autoBackupCheckboxLabel.classList.add('checkbox_label');
+    autoBackupCheckboxLabel.htmlFor = `${settingsKey}-autoBackup`;
+    autoBackupCheckboxLabel.style.margin = '8px 0';
+
+    const autoBackupCheckbox = document.createElement('input');
+    autoBackupCheckbox.id = `${settingsKey}-autoBackup`;
+    autoBackupCheckbox.type = 'checkbox';
+    autoBackupCheckbox.checked = settings.autoBackup ?? true;
+    autoBackupCheckbox.addEventListener('change', () => {
+        settings.autoBackup = autoBackupCheckbox.checked;
         context.saveSettingsDebounced();
     });
 
@@ -2702,14 +2752,14 @@ refreshFoldersTab = async function () {
     initializeBackupSystem();
 
     // Auto-scroll to bottom functionality
-    if (settings.autoScrollToBottom !== false) {
-        setTimeout(() => {
-            const chatElement = document.getElementById('chat');
-            if (chatElement) {
-                chatElement.scrollTop = chatElement.scrollHeight;
-            }
-        }, 1000); // Delay to ensure chat is loaded
-    }
+    // if (settings.autoScrollToBottom !== false) {
+    //     setTimeout(() => {
+    //         const chatElement = document.getElementById('chat');
+    //         if (chatElement) {
+    //             chatElement.scrollTop = chatElement.scrollHeight;
+    //         }
+    //     }, 1000); // Delay to ensure chat is loaded
+    // }
 
     // Activate the default tab on startup
     const defaultTab = settings.defaultTab ?? 'characters';
