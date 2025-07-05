@@ -28,13 +28,17 @@ Use this URL with the extension installer: `https://github.com/SoFizzticated/Sil
 
 ### Main Interface & Organization
 
-![ChatsPlus Interface](./.readme/Preview2.png) ![Recent Chats View](./.readme/Preview3.png)
+| Main Interface                                 | Recent Chats & Organization                  |
+| ---------------------------------------------- | -------------------------------------------- |
+| ![ChatsPlus Interface](./.readme/Preview2.png) | ![Recent Chats View](./.readme/Preview3.png) |
 
 The extension integrates directly into your "Character Management" tab, providing recent chats, search, pinned chats and folders all in the same place. View all your conversations in an organized, easy-to-navigate folder structure with unlimited subfolder organization.
 
 ### Chat Management & Customization
 
-![Pin Your Favorite Chats](./.readme/Pinning.png) ![Search Functionality](./.readme/Search.png) ![Extension Settings](./.readme/Settings.png)
+| Pin Your Chats                                    | Search Functionality                          | Extension Settings                            |
+| ------------------------------------------------- | --------------------------------------------- | --------------------------------------------- |
+| ![Pin Your Favorite Chats](./.readme/Pinning.png) | ![Search Functionality](./.readme/Search.png) | ![Extension Settings](./.readme/Settings.png) |
 
 Pin important chats for quick access, search across character names, chat titles, and last message content. The settings menu allows you to customize your experience with startup tab preferences and data backup and exporting options.
 
