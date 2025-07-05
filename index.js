@@ -2029,11 +2029,11 @@ function renderExtensionSettings() {
     // =========================
     // Auto-Scroll to Bottom Option
     // =========================
-    const autoScrollCheckboxLabel = document.createElement('label');
-    autoScrollCheckboxLabel.classList.add('checkbox_label');
-    autoScrollCheckboxLabel.htmlFor = `${settingsKey}-autoScrollToBottom`;
-    autoScrollCheckboxLabel.style.margin = '16px 0 8px 0';
-    autoScrollCheckboxLabel.style.display = 'block';
+    // const autoScrollCheckboxLabel = document.createElement('label');
+    // autoScrollCheckboxLabel.classList.add('checkbox_label');
+    // autoScrollCheckboxLabel.htmlFor = `${settingsKey}-autoScrollToBottom`;
+    // autoScrollCheckboxLabel.style.margin = '16px 0 8px 0';
+    // autoScrollCheckboxLabel.style.display = 'block';
 
     // const autoScrollCheckbox = document.createElement('input');
     // autoScrollCheckbox.id = `${settingsKey}-autoScrollToBottom`;
