@@ -26,64 +26,22 @@ Use this URL with the extension installer: `https://github.com/SoFizzticated/Sil
 
 ## Features Overview
 
-### Main Interface
+### Main Interface & Organization
 
-![ChatsPlus Interface](./.readme/Preview2.png)
+![ChatsPlus Interface](./.readme/Preview2.png) ![Recent Chats View](./.readme/Preview3.png)
 
-The ChatsPlus extension adds a modern tabbed interface to your SillyTavern character management, making it easy to navigate between different views and organize your conversations.
+The extension integrates directly into your "Character Management" tab, providing recent chats, search, pinned chats and folders all in the same place. View all your conversations in an organized, easy-to-navigate folder structure with unlimited subfolder organization.
 
-### Recent Chats & Organization
+### Chat Management & Customization
 
-![Recent Chats View](./.readme/Preview3.png)
+![Pin Your Favorite Chats](./.readme/Pinning.png) ![Search Functionality](./.readme/Search.png) ![Extension Settings](./.readme/Settings.png)
 
-View all your recent conversations in an organized list, with easy access to your most frequently used chats.
-
-### Chat Pinning
-
-![Pin Your Favorite Chats](./.readme/Pinning.png)
-
-Pin important chats to keep them at the top of your list for quick access. Perfect for your favorite characters or ongoing storylines.
-
-### Advanced Search
-
-![Search Functionality](./.readme/Search.png)
-
-Quickly find specific chats using the built-in search feature. Filter by character name, chat title, or content to locate exactly what you need.
-
-### Settings & Configuration
-
-![Extension Settings](./.readme/Settings.png)
-
-Customize your ChatsPlus experience with comprehensive settings:
-
-- Choose your default startup tab
-- Configure folder behaviors
-- Manage import/export options
-- Control pinning preferences
-
-## Usage
-
-### Basic Navigation
-
-- Access the ChatsPlus tabs from the Character Management menu
-- Switch between Characters, Recent, and Folders tabs
-- Use the search bar to quickly find specific chats
-
-### Managing Chats
-
-- **Pin chats**: Click the pin icon to keep important chats at the top
-- **Create folders**: Use the Folders tab to organize your conversations
-- **Filter content**: Use the search functionality to find specific chats by name or character
-
-### Data Management
-
-- **Export data**: Backup your ChatsPlus configuration and folder structure
-- **Import data**: Restore or transfer your settings to another installation
-- **Wipe data**: Reset all ChatsPlus data while preserving your actual chat content
+Pin important chats for quick access, search across character names, chat titles, and last message content. The settings menu allows you to customize your experience with startup tab preferences and data backup and exporting options.
 
 ## Author
 
-Created by SoFizzticated
+Created by SoFizzticated.
+Feel free to reach out with any questions or suggestions on the extension thread by the SillyTavern Discord server. Otherwise I'm starfish_galaxy on discord or you can hit me up by email.
 
 ## License
 
@@ -91,4 +49,4 @@ AGPLv3
 
 ---
 
-_Enhance your SillyTavern experience with better chat organization and management!_
+_Enhance your SillyTavern experience with **your** chat organization and management!_
