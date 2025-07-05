@@ -1,8 +1,8 @@
 # ChatsPlus
 
 Switching to a char on another character?
-From: "Clicking the new character > 'Manage Character Files' > 'Pray you gave it a decent name to find it' > Click to load it"
-To: "Recent Chats/Folders > Find your pinned or foldered chat and click it"
+- From: "Clicking the new character > 'Manage Character Files' > 'Pray you gave it a decent name to find it' > Click to load it"
+- To: "Recent Chats/Folders > Find your pinned or foldered chat and click it"
 
 Your order, your way.
 
