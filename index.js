@@ -23,12 +23,20 @@ const {
 const MODULE_NAME = 'chatsPlus';
 const defaultSettings = {
     pinnedChats: [],
-    autoBackup: true
+    autoBackup: true,
+    maxBackupSessions: 2
 };
 if (!('folders' in defaultSettings)) defaultSettings.folders = [];
 if (!('chatFolders' in defaultSettings)) defaultSettings.chatFolders = {};
 const MAX_RECENT_CHATS = 100;
-const MAX_BACKUP_SESSIONS = 4;
+
+/**
+ * Get the current maximum number of backup sessions from settings.
+ * @returns {number} Maximum number of backup sessions.
+ */
+function getMaxBackupSessions() {
+    return getSettings().maxBackupSessions ?? defaultSettings.maxBackupSessions;
+}
 
 // =========================
 // 2. Settings & State Management
@@ -281,8 +289,9 @@ async function createBackup(forceCreate = false) {
         }
 
         // Rotate old backups if we have too many different sessions
+        const maxBackupSessions = getMaxBackupSessions();
         const uniqueDates = [...new Set(versions.map(v => v.date))].sort();
-        while (uniqueDates.length >= MAX_BACKUP_SESSIONS) {
+        while (uniqueDates.length >= maxBackupSessions) {
             const oldestDate = uniqueDates.shift();
             const oldBackups = versions.filter(v => v.date === oldestDate);
 
@@ -308,7 +317,11 @@ async function createBackup(forceCreate = false) {
         // Create new backup
         const settings = extensionSettings[MODULE_NAME] || {};
         const json = JSON.stringify(settings, null, 2);
-        const fileName = `chatsplus_backup_${currentDate}_${Date.now()}.json`;
+        const now = new Date();
+        const pad = n => n.toString().padStart(2, '0');
+        const ymd = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+        const hi = `${pad(now.getHours())}${pad(now.getMinutes())}`;
+        const fileName = `chatsplus_backup_${ymd}_${hi}.json`;
         const file = new File([json], fileName, { type: 'application/json' });
 
         const url = await uploadFileAttachmentToServer(file, 'global');
@@ -2132,6 +2145,44 @@ function renderExtensionSettings() {
     autoBackupCheckboxText.textContent = t`Enable automatic backups on login`;
     autoBackupCheckboxLabel.append(autoBackupCheckbox, autoBackupCheckboxText);
     backupSection.appendChild(autoBackupCheckboxLabel);
+
+    // Max backup sessions input
+    const maxBackupSessionsContainer = document.createElement('div');
+    maxBackupSessionsContainer.style.margin = '8px 0';
+    maxBackupSessionsContainer.style.display = 'flex';
+    maxBackupSessionsContainer.style.alignItems = 'center';
+    maxBackupSessionsContainer.style.gap = '8px';
+
+    const maxBackupSessionsLabel = document.createElement('label');
+    maxBackupSessionsLabel.textContent = t`Maximum backup sessions:`;
+    maxBackupSessionsLabel.style.minWidth = '200px';
+
+    const maxBackupSessionsInput = document.createElement('input');
+    maxBackupSessionsInput.type = 'number';
+    maxBackupSessionsInput.min = '1';
+    maxBackupSessionsInput.max = '20';
+    maxBackupSessionsInput.value = settings.maxBackupSessions ?? defaultSettings.maxBackupSessions;
+    maxBackupSessionsInput.style.width = '80px';
+    maxBackupSessionsInput.className = 'chatplus_menu_input';
+    maxBackupSessionsInput.addEventListener('change', () => {
+        const value = parseInt(maxBackupSessionsInput.value);
+        if (value >= 1 && value <= 20) {
+            settings.maxBackupSessions = value;
+            context.saveSettingsDebounced();
+            // Update the description text
+            backupDescription.textContent = t`A backup of your ChatsPlus settings is automatically created once per day on the first login of each day, for up to ${value} different days. Backups are stored server-side and older backups are rotated out automatically.`;
+        }
+    });
+
+    const maxBackupSessionsHelp = document.createElement('span');
+    maxBackupSessionsHelp.style.fontSize = '0.9em';
+    maxBackupSessionsHelp.style.color = '#888';
+    maxBackupSessionsHelp.textContent = t`(1-20 days)`;
+
+    maxBackupSessionsContainer.appendChild(maxBackupSessionsLabel);
+    maxBackupSessionsContainer.appendChild(maxBackupSessionsInput);
+    maxBackupSessionsContainer.appendChild(maxBackupSessionsHelp);
+    backupSection.appendChild(maxBackupSessionsContainer);
 
     const backupButtonsRow = document.createElement('div');
     backupButtonsRow.style.display = 'flex';
