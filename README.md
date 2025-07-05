@@ -8,7 +8,7 @@ Your order, your way.
 
 ## Overview
 
-SillyTavern is a wonderful tool but very Character-centric, making managing conversations across characters cumbersome. ChatsPlus provides a Chat-centric interface integrated into SillyTavern's UI
+SillyTavern is a wonderful tool but very Character-centric, making managing conversations across characters cumbersome. ChatsPlus provides a Chat-centric interface integrated into SillyTavern's UI to address that speed bump.
 
 - **Tabbed Character Management:** Quickly switch between Characters, Recent Chats, and Folders.
 - **Recent Chats View:** See your chats ordered by 'most recent first' in one place.
