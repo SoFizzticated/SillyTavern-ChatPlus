@@ -1,28 +1,6 @@
-# ChatsPlus
-
-Switching to a char on another character?
-- From: "Clicking the new character > 'Manage Character Files' > 'Pray you gave it a decent name to find it' > Click to load it"
-- To: "Recent Chats/Folders > Find your pinned or foldered chat and click it"
-
-Your order, your way.
-
-## Overview
+# ChatsPlus - Recent, Pinned and Folders for Chats in SillyTavern
 
 SillyTavern is a wonderful tool but very Character-centric, making managing conversations across characters cumbersome. ChatsPlus provides a Chat-centric interface integrated into SillyTavern's UI to address that speed bump.
-
-- **Tabbed Character Management:** Quickly switch between Characters, Recent Chats, and Folders.
-- **Recent Chats View:** See your chats ordered by 'most recent first' in one place.
-- **Advanced Search:** Easily find specific chats by character name, chat title, or last message content.
-- **Folders for Chats:** Organize your chats into custom folders and subfolders.
-- **Pin Chats:** Pin important chats for quick retrieval.
-- **Integrated Settings UI:** Manage extension settings directly from the SillyTavern extensions menu.
-- **Customizable Startup Tab:** Choose which tab (Characters, Recent, Folders) is active on startup.
-- **Import/Export Data:** Backup or transfer your ChatsPlus data with simple import/export options.
-
-## Installation
-
-Use this URL with the extension installer: `https://github.com/SoFizzticated/SillyTavern-ChatPlus`
-![Installation Instructions](./.readme/Installation.png)
 
 ## Features Overview
 
@@ -41,6 +19,28 @@ The extension integrates directly into your "Character Management" tab, providin
 | ![Pin Your Favorite Chats](./.readme/Pinning.png) | ![Search Functionality](./.readme/Search.png) | ![Extension Settings](./.readme/Settings.png) |
 
 Pin important chats for quick access, search across character names, chat titles, and last message content. The settings menu allows you to customize your experience with startup tab preferences and data backup and exporting options.
+
+## Summary
+
+Switching to a char on another character?
+From: "Clicking the new character > 'Manage Character Files' > 'Pray you gave it a decent name to find it' > Click to load it"
+To: "Recent Chats/Folders > Find your pinned or foldered chat and click it"
+
+Your order, your way.
+
+- **Tabbed Character Management:** Quickly switch between Characters, Recent Chats, and Folders.
+- **Recent Chats View:** See your chats ordered by 'most recent first' in one place.
+- **Advanced Search:** Easily find specific chats by character name, chat title, or last message content.
+- **Folders for Chats:** Organize your chats into custom folders and subfolders.
+- **Pin Chats:** Pin important chats for quick retrieval.
+- **Integrated Settings UI:** Manage extension settings directly from the SillyTavern extensions menu.
+- **Customizable Startup Tab:** Choose which tab (Characters, Recent, Folders) is active on startup.
+- **Import/Export Data:** Backup or transfer your ChatsPlus data with simple import/export options.
+
+## Installation
+
+Use this URL with the extension installer: `https://github.com/SoFizzticated/SillyTavern-ChatPlus`
+![Installation Instructions](./.readme/Installation.png)
 
 ## Author
 
