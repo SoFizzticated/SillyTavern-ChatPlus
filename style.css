@@ -24,7 +24,6 @@
     min-width: 0;
     flex: 0 0 auto;
     border-radius: 8px;
-    background: var(--SmartThemeBlurTintColor, #f8f8f8);
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     overflow: hidden;
     transition: box-shadow 0.2s;
@@ -40,17 +39,17 @@
     display: flex;
     align-items: center;
     cursor: pointer;
-    font-weight: bold;
-    padding: 8px 8px 0px 12px;
+    font-weight: 600;
+    padding: 8px;
     user-select: none;
-    border-bottom: 1px solid var(--SmartThemeBorderColor, #ccc);
-    background: var(--SmartThemeBlurTintColor, #f8f8f8);
+    border-bottom: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor, #ccc) 25%, transparent);
     gap: 8px;
     width: 100%;
     min-width: 0;
     position: sticky;
     top: 0;
     z-index: 1;
+    margin-top: 5px;
 }
 .collapsible-header .chevron {
     transition: transform 0.2s;
@@ -143,8 +142,8 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 12px;
-    padding: 0 8px 4px 8px;
+    margin-bottom: 8px;
+    padding: 8px 8px 4px 8px;
     width: 100%;
     box-sizing: border-box;
 }
@@ -164,14 +163,14 @@
     justify-content: center;
     color: var(--SmartThemeTextColor, #444);
     opacity: 0.8;
-    transition: background 0.15s, opacity 0.2s, color 0.2s, border-color 0.2s;
+    transition: all 0.5s ease;
     box-shadow: none;
 }
 .add-folder-btn:hover, .settings-action-btn:hover {
-    background: var(--white30a, #f0f0f0);
-    color: var(--SmartThemeTextColor, #222);
+    background: color-mix(in srgb, var(--SmartThemeBodyColor, #ccc) 10%, transparent);
+    color: var(--SmartThemeBodyColor, #ccc);
     opacity: 1;
-    border-color: var(--SmartThemeBorderColor, #888);
+    border-color: var(--SmartThemeBodyColor, #ccc);
 }
 
 .settings-action-btn {
@@ -198,7 +197,7 @@
     background-color: var(--cobalt30a);
 }
 .tabItem:hover {
-    background-color: var(--white30a);
+    background-color: color-mix(in srgb, var(--SmartThemeBodyColor, #ccc) 10%, transparent);
 }
 .tabItem.pinned {
     background: var(--cobalt10a);
@@ -208,12 +207,12 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 1.2em;
     opacity: 0.7;
-    transition: opacity 0.2s;
+    transition: all 0.3s ease;
 }
 .pinBtn:hover {
     opacity: 1;
+    color: var(--SmartThemeQuoteColor);
 }
 
 .tabItem-root {
@@ -223,6 +222,8 @@
     gap: 8px;
     width: 100%;
     box-sizing: border-box;
+    margin: 5px 0;
+    transition: all 0.5s ease;
 }
 .tabItem-previewImg {
     width: 32px;
@@ -256,6 +257,7 @@
 }
 .tabItem-nameRow {
     width: 100%;
+    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -267,6 +269,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
+    margin: 1px 0;
 }
 .tabItem-message {
     white-space: nowrap;
@@ -298,10 +301,10 @@
     width: 100%;
     padding: 6px 10px;
     font-size: 1em;
-    border-radius: 6px;
-    border: 1px solid #333;
-    background: #222;
-    color: #fff;
+    background-color: var(--black30a);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    color: var(--SmartThemeBodyColor);
     margin-right: 8px;
     padding-right: 30px; /* Make room for the clear button */
 }
@@ -338,13 +341,10 @@
 }
 
 .allChatsDateSeparator {
-    font-weight: bolder;
-    font-size: calc(var(--mainFontSize) * 1.10);
-    background: var(--SmartThemeBlurTintColor);
+    font-weight: 600;
+    font-size: calc(var(--mainFontSize) * 1.05);
     margin: 8px 0 2px 0;
     padding: 4px 10px 2px 10px;
-    border-bottom: 1px solid;
-    opacity: 0.85;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -388,6 +388,7 @@
     background: none;
     border: none;
     box-sizing: border-box;
+    border-bottom: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor, #ccc) 10%, transparent);
 }
 .chatsplus-tab {
     flex: 1 1 0;
@@ -401,7 +402,7 @@
     padding: 8px 0;
     cursor: pointer;
     outline: none;
-    transition: background 0.15s, color 0.15s;
+    transition: all 0.5s ease;
     box-shadow: none;
     margin: 0;
     position: relative;
@@ -409,17 +410,18 @@
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
+    opacity: 0.7;
+    border-bottom: 1px solid transparent;
 }
 .chatsplus-tab:hover {
-    background: var(--white30a, #f0f0f0);
-    color: var(--SmartThemeTextColor, #EEE);
+    color: var(--SmartThemeBodyColor, #ccc);
+    opacity: 0.9;
 }
 .chatsplus-tab.active {
-    background: var(--SmartThemeBlurTintColor, #f8f8f8);
-    color: var(--SmartThemeTextColor, #DDD);
-    text-decoration: underline;
-    border-bottom: 2px solid var(--SmartThemeBorderColor, #ccc);
+    color: var(--SmartThemeBodyColor, #ccc);
+    border-bottom: 1px solid var(--SmartThemeBodyColor, #ccc);
     z-index: 3;
+    opacity: 1;
 }
 
 .pin-popup-content {
@@ -445,7 +447,11 @@
 .chatplus_menu_input {
     width: 100%;
     margin-bottom: 8px;
-    color: var(--SmartThemeTextColor, #333);
+    background-color: var(--black30a);
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 5px;
+    padding: 5px 10px;
+    color: var(--SmartThemeBodyColor);
 }
 
 .pin-popup-chat-preview {
