@@ -1178,7 +1178,7 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
 // 6. Extension Settings UI
 // =========================
 /**
- * Render the extension settings panel for Top Info Bar.
+ * Render the extension settings panel for ChatsPlus.
  * Adds an entry to the SillyTavern extensions menu.
  */
 function renderExtensionSettings() {
@@ -1205,7 +1205,7 @@ function renderExtensionSettings() {
     inlineDrawerToggle.append(extensionNameElement, inlineDrawerIcon);
     const inlineDrawerContent = document.createElement('div');
     inlineDrawerContent.classList.add('inline-drawer-content');
-    inlineDrawerContent.innerHTML = `<p>Enable or disable the Top Info Bar extension.</p>`;
+    inlineDrawerContent.innerHTML = `<p>Enable or disable the ChatsPlus extension.</p>`;
     // =========================
     // Enable/Disable Checkbox
     // =========================
