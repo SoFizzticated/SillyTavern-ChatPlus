@@ -6,7 +6,7 @@ import { getGroupPastChats } from '../../../group-chats.js';
 import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat, event_types } from '../../../../script.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { timestampToMoment } from '../../../utils.js';
-import { uploadFileAttachmentToServer, deleteAttachment, getFileAttachment } from '../../../chats.js';
+import { deleteAttachment } from '../../../chats.js';
 import { extension_settings } from '../../../extensions.js';
 import { t } from '../../../i18n.js';
 
@@ -353,12 +353,23 @@ async function promptSelectFolderOrPinned(chat) {
             if (SillyTavern.getContext().characters && SillyTavern.getContext().characters[chatObj.characterId]) {
                 char = SillyTavern.getContext().characters[chatObj.characterId];
             }
+
+            // Check if this might be a group chat
+            let isGroup = false;
+            if (!char) {
+                // Try to identify if this is a group chat by checking if the ID exists in groups
+                // Note: We'd need groupsMap here, but it's not available in this context
+                // For now, we'll assume it might be a group and use the characterId as fallback
+                isGroup = true;
+            }
+
             const chat = {
                 character: char ? (char.name || chatObj.characterId) : chatObj.characterId,
                 avatar: char ? char.avatar : '',
                 file_name: chatObj.file_name,
                 characterId: chatObj.characterId,
-                stat: undefined
+                stat: undefined,
+                isGroup: isGroup
             };
             const tabItem = document.createElement('div');
             tabItem.classList.add('tabItem', 'tabItem-singleline');
@@ -447,10 +458,20 @@ async function getChatFiles() {
 /**
  * Open a chat by its ID, switching to the appropriate group or character chat.
  * @param {string} chatId - The chat file name or ID.
+ * @param {boolean} isGroup - Whether this is a group chat.
+ * @param {string|null} groupId - The group ID if this is a group chat.
  */
-async function openChatById(chatId) {
+async function openChatById(chatId, isGroup = false, groupId = null) {
     const context = SillyTavern.getContext();
     if (!chatId) return;
+
+    if (isGroup && groupId) {
+        if (typeof openGroupChat === 'function') {
+            await openGroupChat(groupId, chatId);
+            return;
+        }
+    }
+
     if (typeof openGroupChat === 'function' && context.groupId) {
         await openGroupChat(context.groupId, chatId);
         return;
@@ -609,12 +630,15 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
     if (!append) container.innerHTML = '';
     let allChats = [];
     let chatStatsMap = {};
+    let groupsMap = {}; // Add groups map for caching
     if (cache && cache.allChats && cache.chatStatsMap) {
         allChats = cache.allChats;
         chatStatsMap = cache.chatStatsMap;
+        groupsMap = cache.groupsMap || {}; // Include groups in cache
     } else {
         const context = SillyTavern.getContext();
         const characters = context.characters || {};
+
         // 1. Fetch all chat lists for all characters in parallel
         const chatListPromises = Object.entries(characters).map(async ([charId, char]) => {
             try {
@@ -623,17 +647,62 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
                     character: char.name || charId,
                     avatar: char.avatar,
                     file_name: chatName,
-                    characterId: charId
+                    characterId: charId,
+                    isGroup: false
                 }));
             } catch (e) {
                 return [];
             }
         });
-        const chatLists = await Promise.all(chatListPromises);
-        allChats = chatLists.flat();
-        // 2. Fetch all stats for all characters in parallel
-        const uniqueCharacterIds = [...new Set(allChats.map(chat => chat.characterId))];
-        const statsPromises = uniqueCharacterIds.map(async (charId) => {
+
+        // 2. Fetch all group chats in parallel
+        let groupChats = [];
+        try {
+            const groupsResponse = await fetch('/api/groups/all', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+            });
+            if (groupsResponse.ok) {
+                const groups = await groupsResponse.json();
+
+                // Build groups map for later use
+                groupsMap = Object.fromEntries(groups.map(group => [group.id, group]));
+
+                const groupChatPromises = groups.map(async (group) => {
+                    try {
+                        const chats = await getGroupPastChats(group.id);
+                        return chats.map(chat => {
+                            const fileName = typeof chat === 'string' ? chat.replace('.jsonl', '') : String(chat.file_name || chat).replace('.jsonl', '');
+                            return {
+                                character: group.name || `Group ${group.id}`,
+                                avatar: group.avatar || '', // Groups might have avatars
+                                file_name: fileName,
+                                characterId: group.id,
+                                isGroup: true,
+                                groupMembers: group.members || [] // Store group member info
+                            };
+                        });
+                    } catch (e) {
+                        return [];
+                    }
+                });
+
+                const groupChatLists = await Promise.all(groupChatPromises);
+                groupChats = groupChatLists.flat();
+            }
+        } catch (e) {
+            console.warn('Failed to load group chats:', e);
+        }
+
+        const characterChatLists = await Promise.all(chatListPromises);
+        allChats = [...characterChatLists.flat(), ...groupChats];
+
+        // 3. Fetch stats for both character and group chats
+        const uniqueCharacterIds = [...new Set(allChats.filter(chat => !chat.isGroup).map(chat => chat.characterId))];
+        const uniqueGroupIds = [...new Set(allChats.filter(chat => chat.isGroup).map(chat => chat.characterId))];
+
+        // Character stats
+        const characterStatsPromises = uniqueCharacterIds.map(async (charId) => {
             try {
                 const statsList = await getPastCharacterChats(charId);
                 return statsList.map(stat => {
@@ -644,9 +713,23 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
                 return [];
             }
         });
-        const statsEntries = (await Promise.all(statsPromises)).flat();
+
+        // Group stats
+        const groupStatsPromises = uniqueGroupIds.map(async (groupId) => {
+            try {
+                const statsList = await getGroupPastChats(groupId);
+                return statsList.map(stat => {
+                    const fileName = typeof stat === 'string' ? stat.replace('.jsonl', '') : String(stat.file_name || stat).replace('.jsonl', '');
+                    return [groupId + ':' + fileName, stat];
+                });
+            } catch (e) {
+                return [];
+            }
+        });
+
+        const statsEntries = (await Promise.all([...characterStatsPromises, ...groupStatsPromises])).flat();
         chatStatsMap = Object.fromEntries(statsEntries);
-        if (setCache) setCache({ allChats, chatStatsMap });
+        if (setCache) setCache({ allChats, chatStatsMap, groupsMap }); // Include groups in cache
     }
     allChats = allChats.map(chat => {
         const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
@@ -687,14 +770,32 @@ async function populateAllChatsTab({ container, loader, tab, filter = '', cache 
             // Fallback: try to get character info from context
             const context = SillyTavern.getContext();
             const char = context.characters && context.characters[pinned.characterId];
-            chatInfo = {
-                character: char ? (char.name || pinned.characterId) : pinned.characterId,
-                avatar: char ? char.avatar : '',
-                file_name: pinned.file_name,
-                characterId: pinned.characterId,
-                stat: stat,
-                last_mes: stat && stat.last_mes ? timestampToMoment(stat.last_mes).toDate() : null
-            };
+
+            // Check if this might be a group chat (groups would not be in context.characters)
+            if (!char) {
+                // This could be a group chat, check groupsMap
+                const group = groupsMap[pinned.characterId];
+                chatInfo = {
+                    character: group ? (group.name || `Group ${group.id}`) : pinned.characterId,
+                    avatar: group ? (group.avatar || '') : '',
+                    file_name: pinned.file_name,
+                    characterId: pinned.characterId,
+                    stat: stat,
+                    last_mes: stat && stat.last_mes ? timestampToMoment(stat.last_mes).toDate() : null,
+                    isGroup: true,
+                    groupMembers: group ? (group.members || []) : []
+                };
+            } else {
+                chatInfo = {
+                    character: char.name || pinned.characterId,
+                    avatar: char.avatar || '',
+                    file_name: pinned.file_name,
+                    characterId: pinned.characterId,
+                    stat: stat,
+                    last_mes: stat && stat.last_mes ? timestampToMoment(stat.last_mes).toDate() : null,
+                    isGroup: false
+                };
+            }
         } else {
             chatInfo = { ...chatInfo, stat };
         }
@@ -1144,7 +1245,9 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
         infoContainer.className = 'tabItem-infoContainer';
         const nameRow = document.createElement('div');
         nameRow.className = 'tabItem-nameRow';
-        nameRow.textContent = `${chat.character}: ${chat.file_name}`;
+        nameRow.textContent = chat.isGroup
+            ? `👥 ${chat.character}: ${chat.file_name}`
+            : `${chat.character}: ${chat.file_name}`;
         const bottomRow = document.createElement('div');
         bottomRow.className = 'tabItem-bottomRow';
         // Pencil icon, first message, pin button (in this order)
@@ -1166,11 +1269,18 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
         if (e.target.closest('.tabItem-pinBtn')) return;
         if (e.target.closest('.chat-rename-icon')) return;
         const context = SillyTavern.getContext();
-        if (String(context.characterId) !== String(chat.characterId)) {
-            await selectCharacterById(chat.characterId);
-            await new Promise(resolve => setTimeout(resolve, 150));
+
+        if (chat.isGroup) {
+            // Handle group chat opening
+            await openChatById(chat.file_name, true, chat.characterId);
+        } else {
+            // Existing character chat logic
+            if (String(context.characterId) !== String(chat.characterId)) {
+                await selectCharacterById(chat.characterId);
+                await new Promise(resolve => setTimeout(resolve, 150));
+            }
+            await openChatById(chat.file_name);
         }
-        await openChatById(chat.file_name);
     });
 }
 
@@ -1261,7 +1371,7 @@ function renderExtensionSettings() {
     // =========================
     const backupSection = document.createElement('div');
     backupSection.style.margin = '16px 0';
-    backupSection.innerHTML = `<b>${t`Backup Management:`}</b>`;
+    backupSection.innerHTML = `<div><b>${t`Backup Management:`}</b></div>`;
 
     // Header for Import/Export section
     const importExportHeader = document.createElement('span');
@@ -1735,7 +1845,8 @@ refreshFoldersTab = async function () {
                         character: char.name || charId,
                         avatar: char.avatar,
                         file_name: chatName,
-                        characterId: charId
+                        characterId: charId,
+                        isGroup: false
                     }));
                 } catch (e) {
                     return [];
@@ -1744,10 +1855,47 @@ refreshFoldersTab = async function () {
             const chatLists = await Promise.all(chatListPromises);
             allChats = allChats.concat(chatLists.flat());
         }
+
+        // Add group chats
+        try {
+            const groupsResponse = await fetch('/api/groups/all', {
+                method: 'POST',
+                headers: getRequestHeaders(),
+            });
+            if (groupsResponse.ok) {
+                const groups = await groupsResponse.json();
+                const groupChatPromises = groups.map(async (group) => {
+                    try {
+                        const chats = await getGroupPastChats(group.id);
+                        return chats.map(chat => {
+                            const fileName = typeof chat === 'string' ? chat.replace('.jsonl', '') : String(chat.file_name || chat).replace('.jsonl', '');
+                            return {
+                                character: group.name || `Group ${group.id}`,
+                                avatar: group.avatar || '',
+                                file_name: fileName,
+                                characterId: group.id,
+                                isGroup: true,
+                                groupMembers: group.members || []
+                            };
+                        });
+                    } catch (e) {
+                        return [];
+                    }
+                });
+
+                const groupChatLists = await Promise.all(groupChatPromises);
+                allChats = allChats.concat(groupChatLists.flat());
+            }
+        } catch (e) {
+            console.warn('Failed to load group chats in folders tab:', e);
+        }
+
         let chatStatsMap = {};
-        // Parallelize fetching stats for all characters
-        const uniqueCharacterIds = [...new Set(allChats.map(chat => chat.characterId))];
-        const statsPromises = uniqueCharacterIds.map(async (charId) => {
+        // Parallelize fetching stats for all characters and groups
+        const uniqueCharacterIds = [...new Set(allChats.filter(chat => !chat.isGroup).map(chat => chat.characterId))];
+        const uniqueGroupIds = [...new Set(allChats.filter(chat => chat.isGroup).map(chat => chat.characterId))];
+
+        const characterStatsPromises = uniqueCharacterIds.map(async (charId) => {
             try {
                 const statsList = await getPastCharacterChats(charId);
                 return statsList.map(stat => {
@@ -1756,8 +1904,20 @@ refreshFoldersTab = async function () {
                 });
             } catch (e) { return []; }
         });
-        const statsEntries = (await Promise.all(statsPromises)).flat();
+
+        const groupStatsPromises = uniqueGroupIds.map(async (groupId) => {
+            try {
+                const statsList = await getGroupPastChats(groupId);
+                return statsList.map(stat => {
+                    const fileName = typeof stat === 'string' ? stat.replace('.jsonl', '') : String(stat.file_name || stat).replace('.jsonl', '');
+                    return [groupId + ':' + fileName, stat];
+                });
+            } catch (e) { return []; }
+        });
+
+        const statsEntries = (await Promise.all([...characterStatsPromises, ...groupStatsPromises])).flat();
         chatStatsMap = Object.fromEntries(statsEntries);
+
         allChats = allChats.map(chat => {
             const stat = chatStatsMap[chat.characterId + ':' + chat.file_name];
             let lastMesRaw = stat && stat.last_mes ? stat.last_mes : null;
@@ -1771,6 +1931,7 @@ refreshFoldersTab = async function () {
             }
             return { ...chat, stat, last_mes: lastMesDate };
         });
+
         // Build the folderedChats map using the new helper function
         const folderedChats = buildFolderedChatsMap(allChats);
         renderAllChatsFoldersUI(foldersTabContainer, folderedChats);
@@ -1792,8 +1953,6 @@ refreshFoldersTab = async function () {
  */
 async function removeAllBackupFiles() {
     try {
-        console.log('ChatsPlus: Removing obsolete backup system...');
-
         // Inlined constants and dependencies
         const BACKUP_STORAGE_KEY = 'chatsPlusBackupVersions';
 
@@ -1806,9 +1965,7 @@ async function removeAllBackupFiles() {
             versions = [];
         }
 
-        if (versions.length === 0) {
-            console.log('ChatsPlus: No backup files found to remove');
-        } else {
+        if (versions.length !== 0) {
             console.log(`ChatsPlus: Found ${versions.length} backup files to remove`);
 
             // Delete all backup files from server
@@ -1831,13 +1988,9 @@ async function removeAllBackupFiles() {
         // Clear all backup data from localStorage
         try {
             localStorage.removeItem(BACKUP_STORAGE_KEY);
-            console.log('ChatsPlus: Cleared backup data from localStorage');
         } catch (error) {
             console.warn('ChatsPlus: Failed to clear backup data from localStorage:', error);
         }
-
-        console.log('ChatsPlus: Backup system removal completed');
-
     } catch (error) {
         console.error('ChatsPlus: Failed to remove backup files:', error);
     }
