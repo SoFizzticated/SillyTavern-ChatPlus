@@ -47,10 +47,23 @@ Use this URL with the extension installer: `https://github.com/SoFizzticated/Sil
 - **Renaming a chat**: Renaming a chat from OUTSIDE the ChatsPlus interface may break the internal organization structure! This is due to a limitation on the events SillyTavern emits when renaming a chat. If you rename a chat, please do so from within the ChatsPlus interface to ensure the folder structure remains intact or export your extension data from the "Settings" menu to edit and fix it manually.
 - **Yes, it is stitched together**: The extension is stitched together which means sometimes things break. In those cases, please reload the page and it should fix itself. If not, please report the issue on the extension thread in the SillyTavern Discord server.
 
-## Author
+## Thank you
 
-Created by SoFizzticated.
-Feel free to reach out with any questions or suggestions on the extension thread by the SillyTavern Discord server. Otherwise I'm starfish_galaxy on discord or you can hit me up by email.
+If you appreciate this plugin make sure to thank these great contributors too, it wouldn't be possible without them!
+
+### To RivelleDays
+- For the style improvements. If this extension looks nice make sure to thank them too!
+- For the "SillyTavern-FriendlyUI" plugin that served as a reference for this plugin
+
+### To Cohee1207
+- For their "Extension-TopInfoBar" plugin which served as the base of this plugin
+
+And to you for contributing and being a part of this great community :)
+
+---
+
+### Created by SoFizzticated
+- Feel free to reach out with any questions or suggestions on the extension thread by the SillyTavern Discord server. Otherwise I'm starfish_galaxy on discord or you can hit me up by email.
 
 ## License
 
