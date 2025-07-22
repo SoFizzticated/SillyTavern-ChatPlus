@@ -437,8 +437,7 @@
     padding-bottom: 20px;
     overflow-y: auto;
     padding-right: 4px;
-    /* Optional: add a background for clarity */
-    /* background: var(--SmartThemeBlurTintColor, #f8f8f8); */
+    background: var(--SmartThemeBlurTintColor, #f8f8f8);
 }
 .chatplus_menu_label {
     display: block;
