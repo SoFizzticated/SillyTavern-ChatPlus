@@ -244,15 +244,24 @@ async function promptSelectFolderOrPinned(chat) {
                 folderChats.slice(0, 3).forEach(chatObj => {
                     // Find character info
                     let char = null;
+                    let isGroup = false;
                     if (SillyTavern.getContext().characters && SillyTavern.getContext().characters[chatObj.characterId]) {
                         char = SillyTavern.getContext().characters[chatObj.characterId];
+                    } else {
+                        // Check if this is a group chat
+                        const group = groups.find(g => g.id === chatObj.characterId);
+                        if (group) {
+                            isGroup = true;
+                            char = { name: group.name || `Group ${group.id}`, avatar: group.avatar || '' };
+                        }
                     }
                     const chat = {
                         character: char ? (char.name || chatObj.characterId) : chatObj.characterId,
                         avatar: char ? char.avatar : '',
                         file_name: chatObj.file_name,
                         characterId: chatObj.characterId,
-                        stat: undefined
+                        stat: undefined,
+                        isGroup: isGroup
                     };
                     // Try to get stat if available
                     if (typeof getPastCharacterChats === 'function') {
@@ -267,10 +276,30 @@ async function promptSelectFolderOrPinned(chat) {
                     tabItem.style.alignItems = 'center';
                     tabItem.style.gap = '10px';
                     tabItem.style.marginBottom = '2px';
-                    const previewImg = document.createElement('img');
-                    previewImg.className = 'tabItem-previewImg';
-                    previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-                    previewImg.alt = chat.character || '';
+
+                    // Character/Group image (character = img, group = div)
+                    let previewImg;
+                    if (isGroup) {
+                        previewImg = document.createElement('div');
+                        previewImg.className = 'tabItem-previewImg group-preview';
+
+                        const group = groups.find(g => g.id === chatObj.characterId);
+                        if (group) {
+                            let result = getGroupAvatar(group);
+                            if (result && result.length > 0) {
+                                const groupElement = result[0];
+                                groupElement.style.width = '100%';
+                                groupElement.style.height = '100%';
+                                groupElement.style.minWidth = 'unset';
+                                previewImg.appendChild(groupElement);
+                            }
+                        }
+                    } else {
+                        previewImg = document.createElement('img');
+                        previewImg.className = 'tabItem-previewImg';
+                        previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+                        previewImg.alt = chat.character || '';
+                    }
                     const nameRow = document.createElement('div');
                     nameRow.className = 'tabItem-nameRow';
                     nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -309,10 +338,33 @@ async function promptSelectFolderOrPinned(chat) {
     tabItem.style.alignItems = 'center';
     tabItem.style.gap = '10px';
     tabItem.style.marginBottom = '2px';
-    const previewImg = document.createElement('img');
-    previewImg.className = 'tabItem-previewImg';
-    previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-    previewImg.alt = chat.character || '';
+
+    // Character/Group image (character = img, group = div)
+    // Check if this is a group chat
+    const isGroup = chat.isGroup || false;
+    let previewImg;
+    if (isGroup) {
+        previewImg = document.createElement('div');
+        previewImg.className = 'tabItem-previewImg group-preview';
+
+        const group = groups.find(g => g.id === chat.characterId);
+        if (group) {
+            let result = getGroupAvatar(group);
+            if (result && result.length > 0) {
+                const groupElement = result[0];
+                groupElement.style.width = '100%';
+                groupElement.style.height = '100%';
+                groupElement.style.minWidth = 'unset';
+                previewImg.appendChild(groupElement);
+            }
+        }
+    } else {
+        previewImg = document.createElement('img');
+        previewImg.className = 'tabItem-previewImg';
+        previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+        previewImg.alt = chat.character || '';
+    }
+
     const nameRow = document.createElement('div');
     nameRow.className = 'tabItem-nameRow';
     nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -350,17 +402,16 @@ async function promptSelectFolderOrPinned(chat) {
         pinnedPreviewContainer.style.marginBottom = '4px';
         pinnedChats.forEach(chatObj => {
             let char = null;
+            let isGroup = false;
             if (SillyTavern.getContext().characters && SillyTavern.getContext().characters[chatObj.characterId]) {
                 char = SillyTavern.getContext().characters[chatObj.characterId];
-            }
-
-            // Check if this might be a group chat
-            let isGroup = false;
-            if (!char) {
-                // Try to identify if this is a group chat by checking if the ID exists in groups
-                // Note: We'd need groupsMap here, but it's not available in this context
-                // For now, we'll assume it might be a group and use the characterId as fallback
-                isGroup = true;
+            } else {
+                // Check if this might be a group chat by checking if the ID exists in groups
+                const group = groups.find(g => g.id === chatObj.characterId);
+                if (group) {
+                    isGroup = true;
+                    char = { name: group.name || `Group ${group.id}`, avatar: group.avatar || '' };
+                }
             }
 
             const chat = {
@@ -378,10 +429,31 @@ async function promptSelectFolderOrPinned(chat) {
             tabItem.style.alignItems = 'center';
             tabItem.style.gap = '10px';
             tabItem.style.marginBottom = '2px';
-            const previewImg = document.createElement('img');
-            previewImg.className = 'tabItem-previewImg';
-            previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-            previewImg.alt = chat.character || '';
+
+            // Character/Group image (character = img, group = div)
+            let previewImg;
+            if (isGroup) {
+                previewImg = document.createElement('div');
+                previewImg.className = 'tabItem-previewImg group-preview';
+
+                const group = groups.find(g => g.id === chatObj.characterId);
+                if (group) {
+                    let result = getGroupAvatar(group);
+                    if (result && result.length > 0) {
+                        const groupElement = result[0];
+                        groupElement.style.width = '100%';
+                        groupElement.style.height = '100%';
+                        groupElement.style.minWidth = 'unset';
+                        previewImg.appendChild(groupElement);
+                    }
+                }
+            } else {
+                previewImg = document.createElement('img');
+                previewImg.className = 'tabItem-previewImg';
+                previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+                previewImg.alt = chat.character || '';
+            }
+
             const nameRow = document.createElement('div');
             nameRow.className = 'tabItem-nameRow';
             nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -1037,10 +1109,38 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
     tabItem.classList.add('tabItem');
     if (isPinned) tabItem.classList.add('pinned');
     tabItem.classList.add('tabItem-root');
-    const previewImg = document.createElement('img');
-    previewImg.className = 'tabItem-previewImg';
-    previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-    previewImg.alt = chat.character || '';
+
+    // Character/Group image (character = img, group = div)
+    // Check if this is a group chat
+    const isGroup = chat.isGroup || false;
+    let previewImg;
+    if (isGroup) {
+        previewImg = document.createElement('div');
+        previewImg.className = 'tabItem-previewImg group-preview';
+
+        // Find the actual group object using the chat's characterId (which is the group ID for group chats)
+        const group = groups.find(g => g.id === chat.characterId);
+        if (group) {
+            // getGroupBlock returns a jQuery object, so we need to get the actual DOM element
+            let result = getGroupAvatar(group);
+            if (result && result.length > 0) {
+                // Extract the actual DOM element from the jQuery object
+                const groupElement = result[0];
+                // Set required styles for consistent sizing
+                groupElement.style.width = '100%';
+                groupElement.style.height = '100%';
+                groupElement.style.minWidth = 'unset';
+                previewImg.appendChild(groupElement);
+            }
+        }
+    } else {
+        previewImg = document.createElement('img');
+        previewImg.className = 'tabItem-previewImg';
+        previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+        previewImg.alt = chat.character || '';
+        previewImg.style.width = '32px';
+        previewImg.style.height = '32px';
+    }
 
     // Pencil icon for renaming chat
     const pencilIcon = document.createElement('i');
@@ -1139,10 +1239,32 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             preview.style.alignItems = 'center';
             preview.style.gap = '10px';
             preview.style.margin = '8px 0 2px 0';
-            const previewImg = document.createElement('img');
-            previewImg.className = 'tabItem-previewImg';
-            previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-            previewImg.alt = chat.character || '';
+
+            // Character/Group image (character = img, group = div)
+            const isGroup = chat.isGroup || false;
+            let previewImg;
+            if (isGroup) {
+                previewImg = document.createElement('div');
+                previewImg.className = 'tabItem-previewImg group-preview';
+
+                const group = groups.find(g => g.id === chat.characterId);
+                if (group) {
+                    let result = getGroupAvatar(group);
+                    if (result && result.length > 0) {
+                        const groupElement = result[0];
+                        groupElement.style.width = '100%';
+                        groupElement.style.height = '100%';
+                        groupElement.style.minWidth = 'unset';
+                        previewImg.appendChild(groupElement);
+                    }
+                }
+            } else {
+                previewImg = document.createElement('img');
+                previewImg.className = 'tabItem-previewImg';
+                previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+                previewImg.alt = chat.character || '';
+            }
+
             const nameRow = document.createElement('div');
             nameRow.className = 'tabItem-nameRow';
             nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -1174,10 +1296,32 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             preview.style.alignItems = 'center';
             preview.style.gap = '10px';
             preview.style.margin = '8px 0 2px 0';
-            const previewImg = document.createElement('img');
-            previewImg.className = 'tabItem-previewImg';
-            previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-            previewImg.alt = chat.character || '';
+
+            // Character/Group image (character = img, group = div)
+            const isGroup = chat.isGroup || false;
+            let previewImg;
+            if (isGroup) {
+                previewImg = document.createElement('div');
+                previewImg.className = 'tabItem-previewImg group-preview';
+
+                const group = groups.find(g => g.id === chat.characterId);
+                if (group) {
+                    let result = getGroupAvatar(group);
+                    if (result && result.length > 0) {
+                        const groupElement = result[0];
+                        groupElement.style.width = '100%';
+                        groupElement.style.height = '100%';
+                        groupElement.style.minWidth = 'unset';
+                        previewImg.appendChild(groupElement);
+                    }
+                }
+            } else {
+                previewImg = document.createElement('img');
+                previewImg.className = 'tabItem-previewImg';
+                previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+                previewImg.alt = chat.character || '';
+            }
+
             const nameRow = document.createElement('div');
             nameRow.className = 'tabItem-nameRow';
             nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -1206,8 +1350,10 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             await refreshFoldersTab();
         } else if (selectedFolderId) {
             const folderIds = getChatFolderIds(chat);
-            if (!folderIds.includes(selectedFolderId)) assignChatToFolder(chat, selectedFolderId);
-            await refreshFoldersTab();
+            if (!folderIds.includes(selectedFolderId)) {
+                assignChatToFolder(chat, selectedFolderId);
+                await refreshFoldersTab();
+            }
         }
     });
     if (isPinned || (folderId && folderId !== 'recent')) {
@@ -1234,7 +1380,10 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
                 if (selectedFolderId === 'pinned') return;
                 else if (selectedFolderId) {
                     const folderIds = getChatFolderIds(chat);
-                    if (!folderIds.includes(selectedFolderId)) assignChatToFolder(chat, selectedFolderId);
+                    if (!folderIds.includes(selectedFolderId)) {
+                        assignChatToFolder(chat, selectedFolderId);
+                        await refreshFoldersTab();
+                    }
                     await populateAllChatsTab();
                 }
             });
@@ -1272,6 +1421,9 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
 
         if (chat.isGroup) {
             // Handle group chat opening
+            // First set the active group, then open the group chat
+            const group = groups.find(g => g.id === chat.characterId);
+            setActiveGroup(group);
             await openChatById(chat.file_name, true, chat.characterId);
         } else {
             // Existing character chat logic
