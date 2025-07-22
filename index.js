@@ -1997,6 +1997,79 @@ function renderExtensionSettings() {
     backupSection.appendChild(exportImportRow);
 
     inlineDrawerContent.appendChild(backupSection);
+
+    // =========================
+    // Manual Reload Section
+    // =========================
+    const reloadSection = document.createElement('div');
+    reloadSection.style.margin = '16px 0';
+    reloadSection.innerHTML = `<div><b>${t`Manual Reload:`}</b></div>`;
+
+    const reloadDescription = document.createElement('p');
+    reloadDescription.textContent = t`If the Recent Chats or Folders tabs become unresponsive, use this button to reload them.`;
+    reloadDescription.style.fontSize = '0.9em';
+    reloadDescription.style.color = '#888';
+    reloadDescription.style.margin = '4px 0 8px 0';
+    reloadSection.appendChild(reloadDescription);
+
+    const reloadBtn = document.createElement('button');
+    reloadBtn.textContent = t`Reload Tabs`;
+    reloadBtn.className = 'settings-action-btn';
+    reloadBtn.style.background = '#f39c12';
+    reloadBtn.style.color = '#fff';
+    reloadBtn.style.border = 'none';
+    reloadBtn.style.padding = '8px 16px';
+    reloadBtn.style.borderRadius = '4px';
+    reloadBtn.style.cursor = 'pointer';
+    reloadBtn.onclick = async () => {
+        // Show loading state
+        const originalText = reloadBtn.textContent;
+        reloadBtn.textContent = t`Reloading...`;
+        reloadBtn.disabled = true;
+
+        try {
+            // Clear the Recent Chats tab container to force a full reload
+            const recentChatsContainer = getOrCreateRecentChatsTabContainer();
+            if (recentChatsContainer) {
+                recentChatsContainer.innerHTML = '';
+                recentChatsTabContainer = null; // Reset the cached container
+            }
+
+            // Force refresh the Folders tab
+            if (typeof refreshFoldersTab === 'function') {
+                await refreshFoldersTab();
+            }
+
+            // If Recent Chats tab is currently active, reload it
+            const recentChatsTab = document.getElementById('chatsplus-recent-chats-tab');
+            const recentChatsButton = document.getElementById('chatsplus-recent-chats-tab-button');
+            if (recentChatsTab && recentChatsTab.style.display !== 'none') {
+                await renderAllChatsInRecentChatsTab();
+            }
+
+            // Show success feedback
+            reloadBtn.textContent = t`Reloaded!`;
+            reloadBtn.style.background = '#27ae60';
+            setTimeout(() => {
+                reloadBtn.textContent = originalText;
+                reloadBtn.style.background = '#f39c12';
+                reloadBtn.disabled = false;
+            }, 2000);
+
+        } catch (error) {
+            console.error('Failed to reload tabs:', error);
+            reloadBtn.textContent = t`Error - Try Again`;
+            reloadBtn.style.background = '#e74c3c';
+            setTimeout(() => {
+                reloadBtn.textContent = originalText;
+                reloadBtn.style.background = '#f39c12';
+                reloadBtn.disabled = false;
+            }, 3000);
+        }
+    };
+    reloadSection.appendChild(reloadBtn);
+
+    inlineDrawerContent.appendChild(reloadSection);
     inlineDrawer.append(inlineDrawerToggle, inlineDrawerContent);
     inlineDrawerToggle.addEventListener('click', function () {
         this.classList.toggle('open');
