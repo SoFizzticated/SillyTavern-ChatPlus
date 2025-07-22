@@ -2,8 +2,8 @@
 // 1. Imports & Constants
 // =========================
 import { addJQueryHighlight } from './jquery-highlight.js';
-import { getGroupPastChats } from '../../../group-chats.js';
-import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat, event_types } from '../../../../script.js';
+import { getGroupAvatar, getGroupBlock, getGroupPastChats, groups } from '../../../group-chats.js';
+import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat, event_types, setActiveGroup } from '../../../../script.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { timestampToMoment } from '../../../utils.js';
 import { deleteAttachment } from '../../../chats.js';
