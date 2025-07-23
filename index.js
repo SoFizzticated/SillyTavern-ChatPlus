@@ -537,21 +537,16 @@ async function openChatById(chatId, isGroup = false, groupId = null) {
     const context = SillyTavern.getContext();
     if (!chatId) return;
 
-    if (isGroup && groupId) {
-        if (typeof openGroupChat === 'function') {
-            await openGroupChat(groupId, chatId);
-            return;
-        }
-    }
-
-    if (typeof openGroupChat === 'function' && context.groupId) {
+    if (isGroup && groupId && typeof openGroupChat === 'function') {
+        await openGroupChat(groupId, chatId);
+    } else if (context.groupId && typeof openGroupChat === 'function') {
         await openGroupChat(context.groupId, chatId);
-        return;
-    }
-    if (typeof openCharacterChat === 'function' && context.characterId !== undefined) {
+    } else if (context.characterId !== undefined && typeof openCharacterChat === 'function') {
         await openCharacterChat(chatId);
-        return;
     }
+    // Call the window["chatsPlusRenderSelectedChat"] to update the "Currently Selected Chats"
+    window['chatsPlusRenderSelectedChat'](chatId);
+    return;
 }
 
 // =========================
