@@ -2139,14 +2139,29 @@ function addTabToCharManagementMenu() {
         const context = SillyTavern.getContext();
         let chatId = getCurrentChatId && getCurrentChatId();
         let charId = context.characterId;
+        let groupId = context.groupId;
         let chat = null;
-        if (context.characters && charId && context.characters[charId]) {
+
+        // Check if we're in a group chat
+        if (groupId && groups) {
+            const group = groups.find(g => g.id === groupId);
+            if (group) {
+                chat = {
+                    character: group.name || `Group ${groupId}`,
+                    avatar: group.avatar || '',
+                    file_name: chatId,
+                    characterId: groupId,
+                    isGroup: true
+                };
+            }
+        } else if (context.characters && charId && context.characters[charId]) {
             const char = context.characters[charId];
             chat = {
                 character: char.name || charId,
                 avatar: char.avatar,
                 file_name: chatId,
-                characterId: charId
+                characterId: charId,
+                isGroup: false
             };
         }
         if (!chat || !chat.file_name) {
@@ -2162,10 +2177,30 @@ function addTabToCharManagementMenu() {
         tabItem.style.alignItems = 'center';
         tabItem.style.gap = '10px';
         tabItem.style.marginBottom = '2px';
-        const previewImg = document.createElement('img');
-        previewImg.className = 'tabItem-previewImg';
-        previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
-        previewImg.alt = chat.character || '';
+
+        // Character/Group image (character = img, group = div)
+        let previewImg;
+        if (chat.isGroup) {
+            previewImg = document.createElement('div');
+            previewImg.className = 'tabItem-previewImg group-preview';
+
+            const group = groups.find(g => g.id === chat.characterId);
+            if (group) {
+                let result = getGroupAvatar(group);
+                if (result && result.length > 0) {
+                    const groupElement = result[0];
+                    groupElement.style.width = '100%';
+                    groupElement.style.height = '100%';
+                    groupElement.style.minWidth = 'unset';
+                    previewImg.appendChild(groupElement);
+                }
+            }
+        } else {
+            previewImg = document.createElement('img');
+            previewImg.className = 'tabItem-previewImg';
+            previewImg.src = typeof getThumbnailUrl === 'function' ? getThumbnailUrl('avatar', chat.avatar) : (chat.avatar || '');
+            previewImg.alt = chat.character || '';
+        }
         const nameRow = document.createElement('div');
         nameRow.className = 'tabItem-nameRow';
         nameRow.textContent = `${chat.character}: ${chat.file_name}`;
@@ -2248,6 +2283,8 @@ function addTabToCharManagementMenu() {
         tabItem.appendChild(pinBtn);
         selectedChatContainer.appendChild(tabItem);
     }
+    // Make renderSelectedChat globally accessible for use in other functions
+    window['chatsPlusRenderSelectedChat'] = renderSelectedChat;
     // Initial render
     renderSelectedChat();
     // Listen for chat changes (simple polling, or you can hook into SillyTavern events if available)
