@@ -2669,16 +2669,6 @@ async function removeAllBackupFiles() {
     // Remove obsolete backup system
     removeAllBackupFiles();
 
-    // Auto-scroll to bottom functionality
-    // if (settings.autoScrollToBottom !== false) {
-    //     setTimeout(() => {
-    //         const chatElement = document.getElementById('chat');
-    //         if (chatElement) {
-    //             chatElement.scrollTop = chatElement.scrollHeight;
-    //         }
-    //     }, 1000); // Delay to ensure chat is loaded
-    // }
-
     // Activate the default tab on startup
     const defaultTab = settings.defaultTab ?? 'characters';
     if (typeof activateTab === 'function') {
