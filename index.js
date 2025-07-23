@@ -2,7 +2,7 @@
 // 1. Imports & Constants
 // =========================
 import { addJQueryHighlight } from './jquery-highlight.js';
-import { getGroupAvatar, getGroupBlock, getGroupPastChats, groups } from '../../../group-chats.js';
+import { getGroupAvatar, getGroupBlock, getGroupPastChats, groups, select_group_chats } from '../../../group-chats.js';
 import { getPastCharacterChats, selectCharacterById, renameGroupOrCharacterChat, event_types, setActiveGroup } from '../../../../script.js';
 import { Popup, POPUP_TYPE, POPUP_RESULT } from '../../../popup.js';
 import { timestampToMoment } from '../../../utils.js';
@@ -1814,7 +1814,8 @@ function renderAllChatsTabItem(chat, container, isPinned, folderId) {
             // First set the active group, then open the group chat
             const group = groups.find(g => g.id === chat.characterId);
             setActiveGroup(group);
-            await openChatById(chat.file_name, true, chat.characterId);
+            select_group_chats(group.id, true);
+            await openChatById(chat.file_name, true, group.id);
         } else {
             // Existing character chat logic
             if (String(context.characterId) !== String(chat.characterId)) {
