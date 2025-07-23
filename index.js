@@ -2287,8 +2287,7 @@ function addTabToCharManagementMenu() {
     window['chatsPlusRenderSelectedChat'] = renderSelectedChat;
     // Initial render
     renderSelectedChat();
-    // Listen for chat changes (simple polling, or you can hook into SillyTavern events if available)
-    setInterval(renderSelectedChat, 1500);
+
 
     const tabsWrapper = document.createElement('div');
     tabsWrapper.id = 'chatsplus-tab-content-wrapper';
