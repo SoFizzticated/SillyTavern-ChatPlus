@@ -1,5 +1,11 @@
 # ChatsPlus - Recent, Pinned and Folders for Chats in SillyTavern
 
+## ChatPlus2 Beta is open now!
+
+[Feel free to try it here :)](https://github.com/SoFizzticated/SillyTavern-ChatPlus2)
+
+[Full link: https://github.com/SoFizzticated/SillyTavern-ChatPlus2 ](https://github.com/SoFizzticated/SillyTavern-ChatPlus2)
+
 SillyTavern is a wonderful tool but very Character-centric, making managing conversations across characters cumbersome. ChatsPlus provides a Chat-centric interface integrated into SillyTavern's UI to address that speed bump.
 
 ## Features Overview
